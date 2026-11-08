@@ -79,12 +79,16 @@
 		></gok-number-input>
 	</div>
 	<p class="summary">
-		Loan <b>{model.loanAmount > 0 ? formatCurrency(model.loanAmount) : '–'}</b><br />
+		Loan <b
+			>{model.loanAmount > 0 && !model.downPaymentError ? formatCurrency(model.loanAmount) : '–'}</b
+		><br />
 		Min amortization
 		<b
-			>{#if model.loanAmount > 0}{model.minAmortization.toFixed(1)}%/yr{:else}–{/if}</b
+			>{#if model.loanAmount > 0 && !model.downPaymentError}{model.minAmortization.toFixed(
+					1
+				)}%/yr{:else}–{/if}</b
 		>
-		{#if model.loanAmount > 0 && model.minAmortization > 0}<gok-button
+		{#if model.loanAmount > 0 && !model.downPaymentError && model.minAmortization > 0}<gok-button
 				variant="tertiary"
 				size="s"
 				{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = true))}

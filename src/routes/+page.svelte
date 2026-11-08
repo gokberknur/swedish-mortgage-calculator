@@ -76,14 +76,20 @@
 	});
 	const i = $derived(m.inputs);
 	type Plan = (typeof m.scenarios)[number];
-	const rows: [string, (s: Plan) => string][] = [
+	const rows = $derived<[string, (s: Plan) => string][]>([
 		['Monthly cost', (s) => formatCurrency(s.mortgageCost)],
 		['Amortization / month', (s) => formatCurrency(s.amort)],
 		['Invested / month', (s) => formatCurrency(s.invest)],
 		['Paid off in', (s) => s.payoff.display],
-		['Interest paid', (s) => formatCurrency(cmp?.same[s.id].interestPaid ?? 0)],
-		['Investment value', (s) => formatCurrency(cmp?.same[s.id].investment ?? 0)]
-	];
+		[
+			`Interest in ${cmp?.payoffDisplay ?? ''}`,
+			(s) => formatCurrency(cmp?.same[s.id].interestPaid ?? 0)
+		],
+		[
+			`Investments in ${cmp?.payoffDisplay ?? ''}`,
+			(s) => formatCurrency(cmp?.same[s.id].investment ?? 0)
+		]
+	]);
 	const invalid = $derived(m.invalid);
 	const headline = $derived(
 		ranked.length === 1
@@ -151,7 +157,7 @@
 		{@attach (n: HTMLElement) => {
 			// A fade at the bottom while the column has more to scroll.
 			const set = () =>
-				n.classList.toggle('more', n.scrollTop + n.clientHeight < n.scrollHeight - 1);
+				n.classList.toggle('fade', n.scrollTop + n.clientHeight < n.scrollHeight - 1);
 			const ro = new ResizeObserver(set);
 			ro.observe(n);
 			for (const c of n.children) ro.observe(c);
@@ -211,72 +217,75 @@
 				</div>
 			{/if}
 
-			<!-- Mounted even while inputs are invalid, so an open section stays open through a typo. -->
-			<gok-accordion class="more" hidden={invalid || !cmp}>
-				<gok-accordion-item heading-level="2">
-					<span slot="summary">Compare in detail</span>
-					<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
-					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-					<div
-						class="table-scroll"
-						role="region"
-						aria-label="Plan comparison"
-						tabindex="0"
-						{@attach (n: HTMLElement) => {
-							// A fade at the right edge while columns are scrolled out of view.
-							const set = () =>
-								n.classList.toggle('more-x', n.scrollLeft + n.clientWidth < n.scrollWidth - 1);
-							const ro = new ResizeObserver(set);
-							ro.observe(n);
-							n.addEventListener('scroll', set, { passive: true });
-							return () => {
-								ro.disconnect();
-								n.removeEventListener('scroll', set);
-							};
-						}}
-					>
-						<table class="compare">
-							<thead>
-								<tr>
-									<th scope="col"><span class="vh">Metric</span></th>
-									{#each ranked as s (s.id)}
-										<th scope="col" class:win={win === s.id}>
-											<span class="meta-label sc-tag">{s.tag}</span>
-											<span class="sc-title">{s.title}</span>
-										</th>
+			<!-- Mounted even while inputs are invalid, so an open section stays open through a typo. The
+			     native wrapper holds `hidden`: on a custom element Svelte would write hidden="false". -->
+			<div hidden={invalid || !cmp}>
+				<gok-accordion class="more">
+					<gok-accordion-item heading-level="2">
+						<span slot="summary">Compare in detail</span>
+						<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+						<div
+							class="table-scroll"
+							role="region"
+							aria-label="Plan comparison"
+							tabindex="0"
+							{@attach (n: HTMLElement) => {
+								// A fade at the right edge while columns are scrolled out of view.
+								const set = () =>
+									n.classList.toggle('more-x', n.scrollLeft + n.clientWidth < n.scrollWidth - 1);
+								const ro = new ResizeObserver(set);
+								ro.observe(n);
+								n.addEventListener('scroll', set, { passive: true });
+								return () => {
+									ro.disconnect();
+									n.removeEventListener('scroll', set);
+								};
+							}}
+						>
+							<table class="compare">
+								<thead>
+									<tr>
+										<th scope="col"><span class="vh">Metric</span></th>
+										{#each ranked as s (s.id)}
+											<th scope="col" class:win={win === s.id}>
+												<span class="meta-label sc-tag">{s.tag}</span>
+												<span class="sc-title">{s.title}</span>
+											</th>
+										{/each}
+									</tr>
+								</thead>
+								<tbody>
+									{#each rows as [label, cell] (label)}
+										<tr
+											><th scope="row">{label}</th>{#each ranked as s (s.id)}<td
+													class:win={win === s.id}>{cell(s)}</td
+												>{/each}</tr
+										>
 									{/each}
-								</tr>
-							</thead>
-							<tbody>
-								{#each rows as [label, cell] (label)}
-									<tr
-										><th scope="row">{label}</th>{#each ranked as s (s.id)}<td
-												class:win={win === s.id}>{cell(s)}</td
-											>{/each}</tr
-									>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-					<p class="fine">Costs and interest before ränteavdrag; investments before ISK tax.</p>
-				</gok-accordion-item>
-				<gok-accordion-item heading-level="2">
-					<span slot="summary">How it's calculated</span>
-					<ul class="assume">
-						<li>
-							Net position: investment value, minus remaining debt, minus the extra interest (after
-							ränteavdrag) a plan pays compared with Pay it down.
-						</li>
-						<li>
-							Amortization is a fixed share of the original loan. Interest and returns stay
-							constant.
-						</li>
-						<li>
-							Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
-						</li>
-					</ul>
-				</gok-accordion-item>
-			</gok-accordion>
+								</tbody>
+							</table>
+						</div>
+						<p class="fine">Costs and interest before ränteavdrag; investments before ISK tax.</p>
+					</gok-accordion-item>
+					<gok-accordion-item heading-level="2">
+						<span slot="summary">How it's calculated</span>
+						<ul class="assume">
+							<li>
+								Net position: investment value, minus remaining debt, minus the extra interest
+								(after ränteavdrag) a plan pays compared with Pay it down.
+							</li>
+							<li>
+								Amortization is a fixed share of the original loan. Interest and returns stay
+								constant.
+							</li>
+							<li>
+								Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
+							</li>
+						</ul>
+					</gok-accordion-item>
+				</gok-accordion>
+			</div>
 			{#if cmp && !invalid}<p class="disclaimer">
 					For information only, not financial advice.
 				</p>{/if}
@@ -328,7 +337,7 @@
 		.lead {
 			display: none;
 		}
-		.right:global(.more) {
+		.right:global(.fade) {
 			mask-image: linear-gradient(#000 calc(100% - 3rem), transparent);
 		}
 	}
