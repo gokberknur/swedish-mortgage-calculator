@@ -158,7 +158,9 @@
 						min="0"
 						max="10"
 						step="0.1"
-						helper={i.bRate < i.aRate ? `Invests ${formatCurrency(s.invest)} a month` : ''}
+						helper={i.bRate < i.aRate && i.bRate >= model.minAmortization
+							? `Invests ${formatCurrency(s.invest)} a month`
+							: ''}
 						oninput={set('bRate')}
 						onchange={restore('bRate')}
 					></gok-number-input>
@@ -203,11 +205,6 @@
 				>Source: Regeringen<span class="vh">{' (opens in a new tab)'}</span> ↗</a
 			>
 		{/if}
-		<br />Your loan-to-value is {model.ltv.toFixed(
-			1
-		)}%{#if i.legacy}{' and your debt-to-income '}{model.lti.toFixed(2)}×{/if}, so the minimum is {model.minAmortization.toFixed(
-			1
-		)}% a year.
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
@@ -251,7 +248,8 @@
 		font-size: var(--gok-type-body-small-size, 14px);
 	}
 	.options gok-number-input {
-		inline-size: 100%;
+		display: block;
+		align-self: stretch;
 	}
 	.options {
 		display: flex;

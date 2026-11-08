@@ -55,7 +55,7 @@
 				`${refused.map((s) => s.title).join(' and ')} ${refused.length > 1 ? 'are' : 'is'} below the ${m.minAmortization.toFixed(1)}% minimum`
 			);
 		if (i.bRate >= i.aRate) out.push('Invest the difference needs a lower rate than Pay it down');
-		return out.join('. ');
+		return out.length ? `${out.join('. ')}.` : '';
 	});
 	// A winner that also costs more each month says so on its row.
 	const extra = $derived.by(() => {
@@ -72,6 +72,13 @@
 		['Interest paid', (s) => formatCurrency(cmp?.same[s.id].interestPaid ?? 0)],
 		['Investment value', (s) => formatCurrency(cmp?.same[s.id].investment ?? 0)]
 	];
+	// Inputs no bank would accept leave the answer empty; the field errors say what to fix.
+	const invalid = $derived(!!m.downPaymentError || m.loanAmount <= 0 || !m.meetsRequirement);
+	// Detail columns lead with the winner, so a narrow table never hides it.
+	const columns = $derived([
+		...ranked,
+		...m.scenarios.filter((s) => !ranked.some((r) => r.id === s.id))
+	]);
 	const winNet = $derived(win && cmp ? cmp.same[win].net : 0);
 </script>
 
@@ -89,10 +96,20 @@
 </div>
 
 <div class="split">
-	<div class="answer" {@attach watch((v) => (answerInView = v))}>
-		{#if cmp && best && !m.downPaymentError}
+	<div
+		class="answer"
+		{@attach watch((v) => (answerInView = v))}
+		{@attach (n: HTMLElement) => {
+			const ro = new ResizeObserver(() =>
+				n.parentElement!.style.setProperty('--answer-h', `${n.offsetHeight + 24}px`)
+			);
+			ro.observe(n);
+			return () => ro.disconnect();
+		}}
+	>
+		{#if cmp && best && !invalid}
 			<section class="verdict">
-				<span class="meta-label">After {cmp.payoffDisplay}</span>
+				<span class="meta-label">When Pay it down is paid off · {cmp.payoffDisplay}</span>
 				<h2 class="statement">
 					<span role="status">
 						{#if ranked.length === 1}Only Pay it down qualifies.{:else if m.verdict!.lead < 1}The
@@ -110,11 +127,13 @@
 	<aside class="inputs" aria-label="Your numbers">
 		<Setup model={m} />
 	</aside>
-	{#if best && !m.downPaymentError && !resultsInView && !answerInView}
+	{#if best && !invalid && !resultsInView && !answerInView}
 		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
 			<span>
-				<b>{best.title} ahead</b>
-				{#if win !== 'A'}<span class="dock-lead">{signed(winNet)} vs Pay it down</span>{/if}
+				<b>{ranked.length === 1 ? 'Only Pay it down qualifies' : `${best.title} ahead`}</b>
+				{#if win !== 'A'}<span class="dock-lead"
+						>{signed(winNet)} vs Pay it down, before ISK tax</span
+					>{/if}
 				{#if note}<span class="dock-warn">⚠ {note}</span>{/if}
 			</span>
 			<span class="dock-cta">See results</span>
@@ -122,12 +141,12 @@
 	{/if}
 
 	<div class="results" id="results" {@attach watch((v) => (resultsInView = v))}>
-		{#if m.downPaymentError || m.loanAmount <= 0}
+		{#if invalid}
 			<!-- The field error says what to fix; there is no answer for a loan no bank would grant. -->
 		{:else if cmp && best}
 			<div class="rank-wrap">
 				{#if ranked.length > 1}<p class="meta-label rank-cap" id="rank-cap">
-						Net position vs Pay it down
+						Net position vs Pay it down, before ISK tax
 					</p>
 					<ol class="rank" aria-labelledby="rank-cap">
 						{#each ranked as r (r.id)}
@@ -158,7 +177,7 @@
 							<thead>
 								<tr>
 									<th scope="col"><span class="vh">Metric</span></th>
-									{#each m.scenarios as s (s.id)}
+									{#each columns as s (s.id)}
 										<th scope="col" class:win={win === s.id}>
 											<span class="meta-label sc-tag">{s.tag}</span>
 											<span class="sc-title">{s.title}</span>
@@ -169,13 +188,13 @@
 							<tbody>
 								{#each rows as [label, cell] (label)}
 									<tr
-										><th scope="row">{label}</th>{#each m.scenarios as s (s.id)}<td
+										><th scope="row">{label}</th>{#each columns as s (s.id)}<td
 												class:win={win === s.id}>{cell(s)}</td
 											>{/each}</tr
 									>
 								{/each}
 								<tr class="net"
-									><th scope="row">Net position</th>{#each m.scenarios as s (s.id)}<td
+									><th scope="row">Net position</th>{#each columns as s (s.id)}<td
 											class:win={win === s.id}>{signed(cmp.same[s.id].net)}</td
 										>{/each}</tr
 								>
@@ -235,15 +254,23 @@
 		.inputs {
 			grid-area: inputs;
 		}
+		/* The verdict and the results stay in view while you edit the inputs beside them: both pin,
+		   the results just under the verdict. */
 		.answer {
 			grid-area: answer;
+			position: sticky;
+			top: var(--gok-space-400, 16px);
+			z-index: 1;
+			align-self: start;
 		}
-		/* The answer column stays in view while you edit the inputs beside it. */
 		.results {
 			grid-area: results;
 			position: sticky;
-			top: var(--gok-space-400, 16px);
+			top: calc(var(--gok-space-400, 16px) + var(--answer-h, 0px));
 			align-self: start;
+		}
+		.lead {
+			display: none;
 		}
 	}
 	.lead {
@@ -386,7 +413,7 @@
 		text-align: left;
 		font-weight: 400;
 		color: var(--gok-color-text-muted);
-		min-inline-size: 8rem;
+		min-inline-size: 6rem;
 	}
 	.compare td {
 		white-space: nowrap;
@@ -409,7 +436,7 @@
 			background: var(--gok-color-surface-overlay, var(--gok-color-surface));
 			backdrop-filter: var(--gok-surface-backdrop, none);
 			white-space: normal;
-			min-inline-size: 8rem;
+			min-inline-size: 6rem;
 		}
 	}
 	.compare .net td {
