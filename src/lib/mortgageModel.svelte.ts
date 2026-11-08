@@ -18,10 +18,10 @@ import {
 	calculateScenario,
 	calculateTotalInterestPaid,
 	calculateInvestmentGrowth,
-	simulateLoanPayments,
-	simulateInvestmentGrowthMonthly,
 	buildScenarioSchedule,
 	formatCurrency,
+	minDownShare,
+	netPosition,
 	type PayoffTime,
 	type ScenarioSchedule
 } from './mortgage';
@@ -90,17 +90,21 @@ export function createMortgageModel() {
 		bRate: 2.0,
 		cRate: 2.5,
 		investmentReturn: 5.0,
-		cInvestmentAmount: 2000
+		cInvestmentAmount: 2000,
+		/** Loan taken before 1 April 2026: keeps the 85% cap and the +1% income rule. */
+		legacy: false,
+		borrowers: 1
 	});
 
 	const loanAmount = $derived(calculateLoanAmount(inputs.propertyValue, inputs.downPayment));
 	const ltv = $derived(calculateLTV(loanAmount, inputs.propertyValue));
 	const lti = $derived(calculateLTI(loanAmount, inputs.annualSalary));
-	const requirements = $derived(calculateSwedishAmortization(ltv, lti));
-	const minDownPayment = $derived(inputs.propertyValue * 0.15);
+	const requirements = $derived(calculateSwedishAmortization(ltv, lti, inputs.legacy));
+	const downShare = $derived(minDownShare(inputs.legacy));
+	const minDownPayment = $derived(inputs.propertyValue * downShare);
 	const downPaymentError = $derived(
 		inputs.downPayment < minDownPayment && inputs.propertyValue > 0
-			? `Enter at least ${formatCurrency(minDownPayment)} (15% of the property value)`
+			? `Enter at least ${formatCurrency(minDownPayment)} (${downShare * 100}% of the property value)`
 			: ''
 	);
 	const propertyError = $derived(
@@ -111,7 +115,7 @@ export function createMortgageModel() {
 	const meetsRequirement = $derived(inputs.aRate >= requirements.totalMinimum);
 
 	const monthlyInterest = $derived(calculateMonthlyInterest(loanAmount, inputs.interestRate));
-	const monthlyTaxBenefit = $derived(calculateMonthlyTaxBenefit(monthlyInterest));
+	const monthlyTaxBenefit = $derived(calculateMonthlyTaxBenefit(monthlyInterest, inputs.borrowers));
 
 	const amortA = $derived(calculateMonthlyAmortization(loanAmount, inputs.aRate));
 	const amortB = $derived(calculateMonthlyAmortization(loanAmount, inputs.bRate));
@@ -184,7 +188,12 @@ export function createMortgageModel() {
 			rate: inputs.aRate
 		};
 
-		const sameAt = (s: typeof scenarioB, investment: number, rate: number): CardSame => {
+		const sameAt = (
+			s: typeof scenarioB,
+			investment: number,
+			rate: number,
+			monthly: number
+		): CardSame => {
 			const remainingDebt = Math.max(0, loanAmount - s.monthlyAmortization * payoffMonths);
 			const interestPaid = calculateTotalInterestPaid(
 				loanAmount,
@@ -197,13 +206,27 @@ export function createMortgageModel() {
 				interestPaid,
 				remainingDebt,
 				investment,
-				financialPosition: investment - remainingDebt,
+				financialPosition: netPosition({
+					loanAmount,
+					interestRate: inputs.interestRate,
+					amortizationRate: rate,
+					baselineRate: inputs.aRate,
+					monthlyInvestment: monthly,
+					investmentReturn: inputs.investmentReturn,
+					month: payoffMonths,
+					borrowers: inputs.borrowers
+				}),
 				payments: payoffMonths,
 				rate
 			};
 		};
-		const bSame = sameAt(scenarioB, investmentB, inputs.bRate);
-		const cSame = sameAt(scenarioC, investmentC, inputs.cRate);
+		const bSame = sameAt(
+			scenarioB,
+			investmentB,
+			inputs.bRate,
+			scenarioA.monthlyAmortization - scenarioB.monthlyAmortization
+		);
+		const cSame = sameAt(scenarioC, investmentC, inputs.cRate, inputs.cInvestmentAmount);
 
 		const fullAt = (
 			s: typeof scenarioB,
@@ -252,12 +275,6 @@ export function createMortgageModel() {
 		};
 	});
 
-	const netBarMax = $derived(
-		comparison
-			? Math.max(1, 0, comparison.bSame.financialPosition, comparison.cSame.financialPosition)
-			: 1
-	);
-
 	const schedules = $derived<Record<ScenarioId, ScenarioSchedule>>({
 		A: buildScenarioSchedule(loanAmount, inputs.interestRate, inputs.aRate, 0, 0),
 		B: buildScenarioSchedule(
@@ -281,30 +298,22 @@ export function createMortgageModel() {
 		const horizon = Math.min(comparison.aCard.payments, 600);
 		if (horizon < 2) return null;
 
-		const series = [
-			{
-				id: 'A' as const,
-				sim: simulateLoanPayments(loanAmount, inputs.interestRate, inputs.aRate, horizon),
-				inv: simulateInvestmentGrowthMonthly(0, inputs.investmentReturn, horizon)
-			},
-			{
-				id: 'B' as const,
-				sim: simulateLoanPayments(loanAmount, inputs.interestRate, inputs.bRate, horizon),
-				inv: simulateInvestmentGrowthMonthly(investB, inputs.investmentReturn, horizon)
-			},
-			{
-				id: 'C' as const,
-				sim: simulateLoanPayments(loanAmount, inputs.interestRate, inputs.cRate, horizon),
-				inv: simulateInvestmentGrowthMonthly(
-					inputs.cInvestmentAmount,
-					inputs.investmentReturn,
-					horizon
-				)
-			}
-		].map((s) => ({
-			id: s.id,
-			net: s.sim.results.map((r, i) => (s.inv[i]?.investmentBalance ?? 0) - r.remainingLoan)
-		}));
+		const plans = [
+			{ id: 'A' as const, rate: inputs.aRate, monthly: 0 },
+			{ id: 'B' as const, rate: inputs.bRate, monthly: investB },
+			{ id: 'C' as const, rate: inputs.cRate, monthly: inputs.cInvestmentAmount }
+		];
+		const netAt = (p: (typeof plans)[number], month: number) =>
+			netPosition({
+				loanAmount,
+				interestRate: inputs.interestRate,
+				amortizationRate: p.rate,
+				baselineRate: inputs.aRate,
+				monthlyInvestment: p.monthly,
+				investmentReturn: inputs.investmentReturn,
+				month,
+				borrowers: inputs.borrowers
+			});
 
 		// gok-chart data, sampled once a year plus the final month.
 		const months: number[] = [];
@@ -313,9 +322,9 @@ export function createMortgageModel() {
 
 		return {
 			labels: months.map((i) => `${+(i / 12).toFixed(1)} y`),
-			series: series.map((s) => ({
-				name: META[s.id].title,
-				values: months.map((i) => Math.round(s.net[i] ?? 0))
+			series: plans.map((p) => ({
+				name: META[p.id].title,
+				values: months.map((i) => Math.round(netAt(p, i)))
 			}))
 		};
 	});
@@ -333,6 +342,9 @@ export function createMortgageModel() {
 		},
 		get requirements() {
 			return requirements;
+		},
+		get downShare() {
+			return downShare;
 		},
 		get minDownPayment() {
 			return minDownPayment;
@@ -360,9 +372,6 @@ export function createMortgageModel() {
 		},
 		get verdict() {
 			return verdict;
-		},
-		get netBarMax() {
-			return netBarMax;
 		},
 		get schedules() {
 			return schedules;

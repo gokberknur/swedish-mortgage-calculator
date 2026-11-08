@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatCurrency } from '$lib/mortgage';
+	import { formatCurrency, RULES_DATE, RULES_SOURCE } from '$lib/mortgage';
 	import type { MortgageModel } from '$lib/mortgageModel.svelte';
 
 	let { model }: { model: MortgageModel } = $props();
@@ -10,7 +10,8 @@
 		if (rulesEl) rulesEl.open = openRules;
 	});
 
-	type Key = keyof MortgageModel['inputs'];
+	type Inputs = MortgageModel['inputs'];
+	type Key = { [K in keyof Inputs]: Inputs[K] extends number ? K : never }[keyof Inputs];
 	type NumberEvent = CustomEvent<{ value: number | null }>;
 	// gok-number-input reports `null` while a field is empty. Typing updates the model only with a
 	// real number; leaving a field empty puts its last value back, so the field and the maths agree.
@@ -33,6 +34,8 @@
 		return { destroy: () => node.removeEventListener('gok-close', fn) };
 	}
 
+	type Field = HTMLElement & { checked?: boolean; value?: string };
+
 	const i = $derived(model.inputs);
 </script>
 
@@ -40,6 +43,26 @@
 	<div class="block-head">
 		<span class="step">1</span>
 		<h2 class="gok-headline-4">Your loan</h2>
+	</div>
+	<div class="situation">
+		<gok-switch
+			{@attach (n: Field) => {
+				n.checked = i.legacy;
+			}}
+			onchange={(e: Event) => (model.inputs.legacy = !!(e.target as Field).checked)}
+			helper="Keeps the old 85% cap and the extra 1% for loans over 4.5× income"
+			>Loan taken before {RULES_DATE}</gok-switch
+		>
+		<gok-segmented
+			label="Borrowers"
+			{@attach (n: Field) => {
+				n.value = String(i.borrowers);
+			}}
+			onchange={(e: Event) => (model.inputs.borrowers = Number((e.target as Field).value))}
+		>
+			<gok-segmented-item value="1">One borrower</gok-segmented-item>
+			<gok-segmented-item value="2">Two borrowers</gok-segmented-item>
+		</gok-segmented>
 	</div>
 	<div class="loan-grid">
 		<gok-number-input
@@ -58,20 +81,23 @@
 			value={i.downPayment}
 			min="0"
 			step="50000"
-			helper="Min 15% of property value"
+			helper={`Min ${model.downShare * 100}% of property value`}
 			error={model.downPaymentError}
 			oninput={set('downPayment')}
 			onchange={restore('downPayment')}
 		></gok-number-input>
-		<gok-number-input
-			label="Annual gross salary (SEK)"
-			locale="sv-SE"
-			value={i.annualSalary}
-			min="0"
-			step="10000"
-			oninput={set('annualSalary')}
-			onchange={restore('annualSalary')}
-		></gok-number-input>
+		{#if i.legacy}
+			<gok-number-input
+				label="Annual gross salary (SEK)"
+				helper="Sets the extra 1% rule for loans over 4.5× income"
+				locale="sv-SE"
+				value={i.annualSalary}
+				min="0"
+				step="10000"
+				oninput={set('annualSalary')}
+				onchange={restore('annualSalary')}
+			></gok-number-input>
+		{/if}
 		<gok-number-input
 			label="Interest rate (%)"
 			value={i.interestRate}
@@ -211,9 +237,13 @@
 	use:onClose={() => (openRules = false)}
 >
 	<p class="muted">
-		Your situation: LTV {model.ltv.toFixed(1)}%, LTI {model.lti.toFixed(2)}× → minimum {model.requirements.totalMinimum.toFixed(
-			1
-		)}%/yr.
+		{#if i.legacy}
+			Rules for loans taken before {RULES_DATE}.
+		{:else}
+			Rules in force since {RULES_DATE} (<a href={RULES_SOURCE} rel="noreferrer">Regeringen</a>).
+		{/if}
+		Your situation: LTV {model.ltv.toFixed(1)}%{#if i.legacy}, LTI {model.lti.toFixed(2)}×{/if}
+		→ minimum {model.requirements.totalMinimum.toFixed(1)}%/yr.
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
@@ -229,10 +259,12 @@
 			LTV &lt; 50% → 0%/yr{#if model.ltv < 50}<span class="applies">{' · applies to you'}</span
 				>{/if}
 		</li>
-		<li class:on={model.lti > 4.5}>
-			LTI &gt; 4.5× → +1%/yr{#if model.lti > 4.5}<span class="applies">{' · applies to you'}</span
-				>{/if}
-		</li>
+		{#if i.legacy}
+			<li class:on={model.lti > 4.5}>
+				LTI &gt; 4.5× → +1%/yr{#if model.lti > 4.5}<span class="applies">{' · applies to you'}</span
+					>{/if}
+			</li>
+		{/if}
 	</ul>
 	<gok-button slot="footer" variant="secondary" use:onClick={() => (openRules = false)}
 		>Close</gok-button
@@ -275,6 +307,13 @@
 	}
 	.return-field {
 		max-inline-size: 16rem;
+		margin-block-end: var(--gok-space-500, 24px);
+	}
+	.situation {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		gap: var(--gok-space-400, 16px) var(--gok-space-600, 32px);
 		margin-block-end: var(--gok-space-500, 24px);
 	}
 	.loan-grid {
