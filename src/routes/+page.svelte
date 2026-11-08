@@ -12,7 +12,7 @@
 	let answerInView = $state(false);
 	let resultsInView = $state(false);
 	const watch =
-		(set: (e: IntersectionObserverEntry) => void, threshold = 0) =>
+		(set: (e: IntersectionObserverEntry) => void, threshold: number | number[] = 0) =>
 		(node: HTMLElement) => {
 			const io = new IntersectionObserver(([e]) => set(e), { threshold });
 			io.observe(node);
@@ -77,11 +77,6 @@
 	];
 	// Inputs no bank would accept leave the answer empty; the field errors say what to fix.
 	const invalid = $derived(!!m.downPaymentError || m.loanAmount <= 0 || !m.meetsRequirement);
-	// Detail columns lead with the winner, so a narrow table never hides it.
-	const columns = $derived([
-		...ranked,
-		...m.scenarios.filter((s) => !ranked.some((r) => r.id === s.id))
-	]);
 	const headline = $derived(
 		ranked.length === 1
 			? 'Only Pay it down qualifies.'
@@ -146,12 +141,17 @@
 	<div
 		class="right"
 		{@attach (n: HTMLElement) => {
-			const ro = new ResizeObserver(() =>
-				n.classList.toggle('scrolls', n.scrollHeight > n.clientHeight + 1)
-			);
+			// A fade at the bottom while the column has more to scroll.
+			const set = () =>
+				n.classList.toggle('more', n.scrollTop + n.clientHeight < n.scrollHeight - 1);
+			const ro = new ResizeObserver(set);
 			ro.observe(n);
 			for (const c of n.children) ro.observe(c);
-			return () => ro.disconnect();
+			n.addEventListener('scroll', set, { passive: true });
+			return () => {
+				ro.disconnect();
+				n.removeEventListener('scroll', set);
+			};
 		}}
 	>
 		<div class="answer" {@attach watch((e) => (answerInView = e.isIntersecting))}>
@@ -168,17 +168,19 @@
 			{/if}
 		</div>
 
-		<div class="results" id="results">
+		<div
+			class="results"
+			id="results"
+			{@attach watch(
+				// Hidden once the top of the results is a ranking's height into the screen, or passed.
+				(e) => (resultsInView = e.boundingClientRect.top < innerHeight - 200),
+				[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+			)}
+		>
 			{#if invalid}
 				<!-- The field error says what to fix; there is no answer for a loan no bank would grant. -->
 			{:else if cmp && best}
-				<div
-					class="rank-wrap"
-					{@attach watch(
-						(e) => (resultsInView = e.isIntersecting || e.boundingClientRect.top < 0),
-						1
-					)}
-				>
+				<div class="rank-wrap">
 					{#if ranked.length > 1}<p class="meta-label rank-cap" id="rank-cap">
 							Better off than Pay it down, before ISK tax
 						</p>
@@ -211,7 +213,7 @@
 								<thead>
 									<tr>
 										<th scope="col"><span class="vh">Metric</span></th>
-										{#each columns as s (s.id)}
+										{#each ranked as s (s.id)}
 											<th scope="col" class:win={win === s.id}>
 												<span class="meta-label sc-tag">{s.tag}</span>
 												<span class="sc-title">{s.title}</span>
@@ -222,7 +224,7 @@
 								<tbody>
 									{#each rows as [label, cell] (label)}
 										<tr
-											><th scope="row">{label}</th>{#each columns as s (s.id)}<td
+											><th scope="row">{label}</th>{#each ranked as s (s.id)}<td
 													class:win={win === s.id}>{cell(s)}</td
 												>{/each}</tr
 										>
@@ -235,7 +237,6 @@
 					<gok-accordion-item heading-level="2">
 						<span slot="summary">How it's calculated</span>
 						<ul class="assume">
-							<li>Every plan is judged on the day Pay it down clears the loan.</li>
 							<li>
 								Net position: investment value, minus remaining debt, minus the extra interest
 								(after ränteavdrag) a plan pays compared with Pay it down.
@@ -305,15 +306,8 @@
 		.lead {
 			display: none;
 		}
-		.right:global(.scrolls) .answer {
-			background: var(--gok-background);
-			background-attachment: fixed;
-		}
-		/* If the details make the column scroll, the verdict stays at its top. */
-		.answer {
-			position: sticky;
-			top: 0;
-			z-index: 1;
+		.right:global(.more) {
+			mask-image: linear-gradient(#000 calc(100% - 3rem), transparent);
 		}
 	}
 	.lead {
@@ -461,6 +455,7 @@
 		border-bottom: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
 	}
 	.compare th[scope='row'] {
+		font-family: var(--gok-font-family-text);
 		text-align: left;
 		font-weight: 400;
 		color: var(--gok-color-text-muted);
