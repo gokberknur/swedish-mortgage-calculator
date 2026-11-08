@@ -79,6 +79,9 @@ const META: Record<ScenarioId, { title: string; tag: string; desc: string }> = {
 	}
 };
 
+/** Chart series names: short enough that the line-end labels never truncate on a phone. */
+const SHORT: Record<ScenarioId, string> = { A: 'A · Pay down', B: 'B · Invest', C: 'C · Hybrid' };
+
 export function createMortgageModel() {
 	const inputs = $state({
 		propertyValue: 4000000,
@@ -323,7 +326,7 @@ export function createMortgageModel() {
 		return {
 			labels: months.map((i) => `${+(i / 12).toFixed(1)} y`),
 			series: plans.map((p) => ({
-				name: META[p.id].title,
+				name: SHORT[p.id],
 				values: months.map((i) => Math.round(netAt(p, i)))
 			}))
 		};

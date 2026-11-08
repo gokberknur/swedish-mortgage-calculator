@@ -47,8 +47,8 @@
 				<thead>
 					<tr>
 						<th>Month</th>
-						<th>Total</th>
-						<th>Interest</th>
+						<th>Payment (excl. avgift)</th>
+						<th>Interest (before ränteavdrag)</th>
 						<th>Amortization</th>
 						<th>Investment</th>
 						<th>Investment balance</th>

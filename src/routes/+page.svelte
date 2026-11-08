@@ -70,6 +70,34 @@
 		m.scenarios.map((s) => ({ ...s, net: netAt(s.id) })).sort((a, b) => b.net - a.net)
 	);
 	const rankMax = $derived(Math.max(1, ...ranked.map((r) => r.net)));
+	// The verdict must not quietly recommend a plan a bank would refuse, or one that only wins by
+	// spending more each month.
+	const caveats = $derived.by(() => {
+		const best = m.scenarios.find((s) => s.id === win);
+		const a = m.scenarios[0];
+		if (!best || m.verdict!.lead < 1) return [];
+		const out: string[] = [];
+		if (best.rate < m.requirements.totalMinimum)
+			out.push(
+				`${best.title} amortizes ${best.rate}%, below the ${m.requirements.totalMinimum.toFixed(1)}% legal minimum, so a bank would not allow it.`
+			);
+		const extra = best.mortgageCost - a.mortgageCost;
+		if (extra >= 1)
+			out.push(
+				`It also costs ${formatCurrency(extra)} more a month than Pay it down, which explains part of its lead.`
+			);
+		return out;
+	});
+	// gok-chart colours series 1-3 (A, B, C) from these tokens: the winner gets the one accent,
+	// the others two greys, so colour never carries the plan on its own (the legend names it).
+	const chartColors = $derived(
+		(['A', 'B', 'C'] as const)
+			.map((id, n) => {
+				const grey = n === 0 ? 'var(--gok-color-text-muted)' : 'var(--gok-color-border-strong)';
+				return `--gok-chart-${n + 1}: ${id === win ? 'var(--gok-color-primary)' : grey}`;
+			})
+			.join('; ')
+	);
 	const signed = (n: number) => `${n > 0 ? '+' : ''}${formatCurrency(n)}`;
 </script>
 
@@ -94,6 +122,19 @@
 	<aside class="inputs" aria-label="Your numbers">
 		<Setup model={m} />
 	</aside>
+	{#if m.verdict && !resultsInView}
+		<a class="dock" href="#results">
+			<span>
+				<b
+					>{#if m.verdict.lead < 1}The plans finish level{:else}{m.verdict.best.title} ahead{/if}</b
+				>
+				{#if m.verdict.lead >= 1}<span class="dock-lead"
+						>+{formatCurrency(m.verdict.lead)} vs the next plan</span
+					>{/if}
+			</span>
+			<span class="dock-cta">See results</span>
+		</a>
+	{/if}
 
 	<div class="results" id="results" {@attach watchResults}>
 		{#if cmp && m.verdict}
@@ -110,7 +151,7 @@
 				<h2 class="statement">
 					<span role="status">
 						{#if m.verdict.lead < 1}The strategies finish level.{:else}{m.verdict.best.title} comes out
-							ahead.{/if}
+							ahead.<span class="vh">{` By ${formatCurrency(m.verdict.lead)}.`}</span>{/if}
 					</span>
 				</h2>
 				{#if m.verdict.lead >= 1}
@@ -118,6 +159,9 @@
 						+{formatCurrency(m.verdict.lead)}
 						<span>better net position than the next-best plan</span>
 					</p>
+				{/if}
+				{#if caveats.length}
+					<gok-alert status="warning" class="caveat">{caveats.join(' ')}</gok-alert>
 				{/if}
 				<ol class="rank" aria-label="Net position by plan">
 					{#each ranked as r (r.id)}
@@ -199,6 +243,7 @@
 				<section class="block">
 					<div class="block-head"><h2 class="gok-headline-4">Net position over time</h2></div>
 					<gok-chart
+						style={chartColors}
 						bind:this={chartEl}
 						type="line"
 						height={280}
@@ -321,20 +366,6 @@
 	</div>
 </div>
 
-{#if m.verdict && !resultsInView}
-	<a class="dock" href="#results">
-		<span>
-			<b
-				>{#if m.verdict.lead < 1}The plans finish level{:else}{m.verdict.best.title} ahead{/if}</b
-			>
-			{#if m.verdict.lead >= 1}<span class="dock-lead"
-					>+{formatCurrency(m.verdict.lead)} vs the next plan</span
-				>{/if}
-		</span>
-		<span class="dock-cta">See results</span>
-	</a>
-{/if}
-
 <ScheduleDialog
 	open={openSched !== ''}
 	title={openSched
@@ -385,7 +416,6 @@
 			top: var(--gok-space-400, 16px);
 			max-block-size: calc(100dvh - 2 * var(--gok-space-400, 16px));
 			overflow-y: auto;
-			overscroll-behavior: contain;
 			padding-inline-end: var(--gok-space-300, 12px);
 		}
 	}
@@ -431,7 +461,7 @@
 	.rank .bar i {
 		display: block;
 		block-size: 100%;
-		background: var(--gok-color-text-muted);
+		background: var(--gok-color-border-strong, var(--gok-color-text-muted));
 	}
 	.rank .win .tag {
 		border-color: var(--gok-color-primary);
@@ -446,6 +476,11 @@
 	}
 	.dock {
 		display: none;
+	}
+	.caveat {
+		display: block;
+		margin-top: var(--gok-space-400, 16px);
+		max-inline-size: 36rem;
 	}
 	@media (max-width: 899.98px) {
 		.dock {
@@ -464,6 +499,10 @@
 			border-top: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
 			color: var(--gok-color-text);
 			text-decoration: none;
+		}
+		/* Focused fields scroll clear of the bar instead of hiding behind it. */
+		:global(html) {
+			scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
 		}
 		.dock b {
 			display: block;
@@ -543,7 +582,7 @@
 		overflow: hidden;
 		clip: rect(0 0 0 0);
 	}
-	@media (max-width: 600px) {
+	@container (max-width: 600px) {
 		.compare th,
 		.compare td {
 			padding: var(--gok-space-300, 12px) var(--gok-space-200, 8px);

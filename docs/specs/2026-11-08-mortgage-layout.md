@@ -87,4 +87,23 @@ This work happens in the new `swedish-mortgage-calculator` repo, not in this sit
 
 ## Round log
 
-_Filled in as the rounds run._
+Direction chosen 2026-11-08: **split pane** (sketch 1 in the Design Hub).
+
+### Round 1: Block (2 HIGH, 4 MEDIUM, 3 LOW)
+
+All fixed:
+
+- HIGH: on phones the bottom bar covered the field you tabbed to. The page now keeps focused fields
+  clear of it (`scroll-padding-bottom`).
+- HIGH: the verdict could recommend a plan a bank would refuse, or one that wins only by spending
+  more each month. A warning under the verdict now says so in either case. Hybrid's monthly
+  investment is capped at 1 000 000 kr.
+- MEDIUM: screen readers heard nothing when the lead changed but the winner didn't. The live region
+  now includes the lead.
+- MEDIUM: the input column trapped the scroll wheel on desktop. It now passes the scroll to the page.
+- MEDIUM: the chart used three hues. The winner now takes the accent and the other two are greys;
+  line ends use short tagged names ("B · Invest") so they no longer truncate.
+- MEDIUM: "Total" meant two things. The schedule says "Payment (excl. avgift)" and "Interest
+  (before ränteavdrag)".
+- LOW: pinned table labels follow the results column width; the bottom bar comes right after the
+  inputs in tab order; non-winning bars are quieter in dark mode.

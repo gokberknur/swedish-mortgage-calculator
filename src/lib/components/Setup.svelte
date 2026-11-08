@@ -204,6 +204,7 @@
 						locale="sv-SE"
 						value={i.cInvestmentAmount}
 						min="0"
+						max="1000000"
 						step="100"
 						oninput={set('cInvestmentAmount')}
 						onchange={restore('cInvestmentAmount')}
