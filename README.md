@@ -39,6 +39,7 @@ npm run dev      # http://localhost:5173
 npm test         # maths checks (node --test)
 npm run check    # types and Svelte
 npm run build    # static site in build/
+npm run deploy   # build, then publish to mortgage.gokberk.se (Cloudflare)
 ```
 
 ## Stack

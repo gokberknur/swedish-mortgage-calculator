@@ -1,0 +1,7 @@
+// Cloudflare Workers static assets: the prerendered build/ folder, served at its own subdomain.
+{
+	"name": "swedish-mortgage-calculator",
+	"compatibility_date": "2026-11-01",
+	"assets": { "directory": "./build" },
+	"routes": [{ "pattern": "mortgage.gokberk.se", "custom_domain": true }]
+}
