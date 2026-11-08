@@ -125,8 +125,8 @@ gok-accordion-item {
 gok-accordion-item::part(panel) {
 	padding-inline: 0;
 }
-/* The one accent belongs to the winner; selected options are ink. */
-gok-segmented-item {
+/* The one accent belongs to the winner; the selected option is ink. */
+gok-segmented-item[selected] {
 	--gok-segmented-background-color: var(--gok-color-text);
 	--gok-segmented-text-color: var(--gok-background-color, var(--gok-color-surface));
 }

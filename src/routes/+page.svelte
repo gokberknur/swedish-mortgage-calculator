@@ -95,7 +95,20 @@
 	<p>Pay off your mortgage faster, or invest instead?</p>
 </div>
 
-<div class="split">
+<div
+	class="split"
+	{@attach (n: HTMLElement) => {
+		// Space below the grid (footer, padding): the pinned column must fit above it at the page end.
+		const set = () =>
+			n.style.setProperty(
+				'--below',
+				`${document.documentElement.scrollHeight - (n.getBoundingClientRect().bottom + scrollY)}px`
+			);
+		const ro = new ResizeObserver(set);
+		ro.observe(document.body);
+		return () => ro.disconnect();
+	}}
+>
 	<aside class="inputs" aria-label="Your numbers">
 		<Setup model={m} />
 	</aside>
@@ -142,9 +155,9 @@
 								<li class:win={win === r.id}>
 									<span class="tag" aria-hidden="true">{r.tag}</span>
 									<span class="name"
-										>{r.title}{#if win === r.id}<span class="meta-label"
-												>{#if extra >= 1}{` · ${formatCurrency(extra)} more a month`}{/if}</span
-											>{/if}</span
+										>{r.title}{#if win === r.id}{#if extra >= 1}<span class="extra"
+													>{` · ${formatCurrency(extra)} more a month`}</span
+												>{/if}{/if}</span
 									>
 									<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
 									<span class="bar" aria-hidden="true"
@@ -202,7 +215,7 @@
 							</li>
 							<li>
 								Amortization is a fixed share of the original loan. Interest and returns stay
-								constant; returns are before ISK tax.
+								constant.
 							</li>
 							<li>
 								Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
@@ -256,7 +269,7 @@
 			position: sticky;
 			top: var(--gok-space-400, 16px);
 			align-self: start;
-			max-block-size: calc(100dvh - 2 * var(--gok-space-400, 16px));
+			max-block-size: calc(100dvh - 2 * var(--gok-space-400, 16px) - var(--below, 0px));
 			overflow-y: auto;
 			display: flex;
 			flex-direction: column;
@@ -276,6 +289,10 @@
 		margin: var(--gok-space-300, 12px) 0 0;
 		font-size: var(--gok-type-caption-size, 0.75rem);
 		color: var(--gok-color-text-muted);
+	}
+	.rank .extra {
+		color: var(--gok-color-text-muted);
+		font-size: var(--gok-type-body-small-size, 14px);
 	}
 	.rank-cap {
 		margin: 0 0 var(--gok-space-300, 12px);
@@ -344,9 +361,9 @@
 			align-items: center;
 			gap: var(--gok-space-300, 12px);
 			padding: var(--gok-space-300, 12px)
-				max(var(--gok-space-400, 16px), env(safe-area-inset-right))
+				max(var(--gok-container-inline-pad, 16px), env(safe-area-inset-right))
 				calc(var(--gok-space-300, 12px) + env(safe-area-inset-bottom))
-				max(var(--gok-space-400, 16px), env(safe-area-inset-left));
+				max(var(--gok-container-inline-pad, 16px), env(safe-area-inset-left));
 			background: var(--gok-color-surface);
 			border-top: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
 			color: var(--gok-color-text);
@@ -421,6 +438,7 @@
 		.compare th,
 		.compare td {
 			padding: var(--gok-space-300, 12px) var(--gok-space-200, 8px);
+			text-align: start;
 		}
 		.compare th[scope='row'],
 		.compare thead th:first-child {
@@ -429,7 +447,7 @@
 			background: var(--gok-color-surface-overlay, var(--gok-color-surface));
 			backdrop-filter: var(--gok-surface-backdrop, none);
 			white-space: normal;
-			min-inline-size: 6rem;
+			min-inline-size: 5rem;
 		}
 	}
 	.compare .net td {

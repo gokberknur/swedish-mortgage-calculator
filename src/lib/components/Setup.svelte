@@ -16,20 +16,28 @@
 	type NumberEvent = CustomEvent<{ value: number | null }>;
 	// gok-number-input reports `null` while a field is empty. Typing updates the model only with a
 	// real number; leaving a field empty puts its last value back, so the field and the maths agree.
-	const set = (key: Key) => (e: Event) => {
-		const v = (e as NumberEvent).detail?.value;
-		// Out-of-range values wait for blur, where the field clamps them, so the verdict never
-		// shows a figure the field is about to reject.
-		const t = e.target as HTMLElement;
-		const min = t.getAttribute('min');
-		const max = t.getAttribute('max');
-		if (v == null || (min != null && v < +min) || (max != null && v > +max)) return;
-		model.inputs[key] = v;
-	};
+	const set =
+		(key: Key, ok: (v: number) => boolean = () => true) =>
+		(e: Event) => {
+			const v = (e as NumberEvent).detail?.value;
+			// Out-of-range values wait for blur, where the field clamps them, so the verdict never
+			// shows a figure the field is about to reject.
+			const t = e.target as HTMLElement;
+			const min = t.getAttribute('min');
+			const max = t.getAttribute('max');
+			if (v == null || (min != null && v < +min) || (max != null && v > +max) || !ok(v)) return;
+			model.inputs[key] = v;
+		};
 	const restore = (key: Key) => (e: Event) => {
-		if ((e as NumberEvent).detail?.value == null)
-			(e.target as HTMLElement & { value: number }).value = model.inputs[key];
+		const v = (e as NumberEvent).detail?.value;
+		if (v == null) (e.target as HTMLElement & { value: number }).value = model.inputs[key];
+		// A value held back while typing is committed on change, where its field error can show.
+		else model.inputs[key] = v;
 	};
+	// While typing, half-entered loan figures would blank the answer on every keystroke; only a loan a
+	// bank could grant is committed as you type.
+	const grantable = (property: number, down: number) =>
+		property > 0 && down < property && down >= property * model.downShare;
 
 	type Field = HTMLElement & { checked?: boolean; value?: string };
 
@@ -46,7 +54,7 @@
 			locale="sv-SE"
 			step="100000"
 			error={model.propertyError}
-			oninput={set('propertyValue')}
+			oninput={set('propertyValue', (v) => grantable(v, i.downPayment))}
 			onchange={restore('propertyValue')}
 		></gok-number-input>
 		<gok-number-input
@@ -57,7 +65,7 @@
 			step="50000"
 			helper={`Min ${model.downShare * 100}%`}
 			error={model.downPaymentError}
-			oninput={set('downPayment')}
+			oninput={set('downPayment', (v) => grantable(i.propertyValue, v))}
 			onchange={restore('downPayment')}
 		></gok-number-input>
 		<gok-number-input
@@ -209,16 +217,18 @@
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
-			LTV &gt; 70% → 2%/yr{#if model.ltv > 70}<span class="applies">{' · applies to you'}</span
+			Loan-to-value &gt; 70% → 2%/yr{#if model.ltv > 70}<span class="applies"
+					>{' · applies to you'}</span
 				>{/if}
 		</li>
 		<li class:on={model.ltv >= 50 && model.ltv <= 70}>
-			LTV 50–70% → 1%/yr{#if model.ltv >= 50 && model.ltv <= 70}<span class="applies"
+			Loan-to-value 50–70% → 1%/yr{#if model.ltv >= 50 && model.ltv <= 70}<span class="applies"
 					>{' · applies to you'}</span
 				>{/if}
 		</li>
 		<li class:on={model.ltv < 50}>
-			LTV &lt; 50% → 0%/yr{#if model.ltv < 50}<span class="applies">{' · applies to you'}</span
+			Loan-to-value &lt; 50% → 0%/yr{#if model.ltv < 50}<span class="applies"
+					>{' · applies to you'}</span
 				>{/if}
 		</li>
 		{#if i.legacy}
