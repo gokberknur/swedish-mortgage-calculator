@@ -285,6 +285,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.summary b {
+		font-family: var(--gok-font-family-mono);
 		color: var(--gok-color-text);
 		font-weight: var(--gok-font-weight-medium, 500);
 	}

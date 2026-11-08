@@ -12,9 +12,9 @@
 	let answerInView = $state(false);
 	let resultsInView = $state(false);
 	const watch =
-		(set: (v: boolean) => void, threshold = 0) =>
+		(set: (e: IntersectionObserverEntry) => void, threshold = 0) =>
 		(node: HTMLElement) => {
-			const io = new IntersectionObserver(([e]) => set(e.isIntersecting), { threshold });
+			const io = new IntersectionObserver(([e]) => set(e), { threshold });
 			io.observe(node);
 			return () => io.disconnect();
 		};
@@ -107,7 +107,7 @@
 
 <!-- Always present, so a returning answer is announced; empty while the inputs are invalid. -->
 <p class="vh" role="status">
-	{#if cmp && best && !invalid}{headline}{#if win !== 'A'}{` ${signed(winNet)} vs Pay it down.`}{/if}{/if}
+	{#if cmp && best && !invalid}{headline}{#if win !== 'A'}{` ${signed(winNet)} better off than Pay it down.`}{/if}{#if note}{` ${note}`}{/if}{/if}
 </p>
 
 <div
@@ -136,9 +136,10 @@
 		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
 			<span>
 				<b>{ranked.length === 1 ? 'Only Pay it down qualifies' : `${best.title} ahead`}</b>
-				{#if win !== 'A'}<span class="dock-lead">{signed(winNet)} vs Pay it down</span>{/if}
+				{#if win !== 'A'}<span class="dock-lead">{signed(winNet)}</span>{/if}
 			</span>
-			<span class="dock-cta">See results</span>
+			<span class="vh">{' See results.'}</span>
+			<span class="dock-cta" aria-hidden="true">↓</span>
 		</a>
 	{/if}
 
@@ -153,13 +154,15 @@
 			return () => ro.disconnect();
 		}}
 	>
-		<div class="answer" {@attach watch((v) => (answerInView = v))}>
+		<div class="answer" {@attach watch((e) => (answerInView = e.isIntersecting))}>
 			{#if cmp && best && !invalid}
 				<section class="verdict">
-					<span class="meta-label">In {cmp.payoffDisplay}</span>
+					{#if ranked.length > 1}<span class="meta-label"
+							>In {cmp.payoffDisplay}, when Pay it down is paid off</span
+						>{/if}
 					<h2 class="statement">{headline}</h2>
 					{#if win !== 'A'}<p class="lead" aria-hidden="true">
-							{signed(winNet)} vs Pay it down
+							{signed(winNet)} better off than Pay it down
 						</p>{/if}
 				</section>
 			{/if}
@@ -169,9 +172,15 @@
 			{#if invalid}
 				<!-- The field error says what to fix; there is no answer for a loan no bank would grant. -->
 			{:else if cmp && best}
-				<div class="rank-wrap" {@attach watch((v) => (resultsInView = v), 1)}>
+				<div
+					class="rank-wrap"
+					{@attach watch(
+						(e) => (resultsInView = e.isIntersecting || e.boundingClientRect.top < 0),
+						1
+					)}
+				>
 					{#if ranked.length > 1}<p class="meta-label rank-cap" id="rank-cap">
-							Net position vs Pay it down, before ISK tax
+							Better off than Pay it down, before ISK tax
 						</p>
 						<ol class="rank" aria-labelledby="rank-cap">
 							{#each ranked as r (r.id)}
@@ -297,7 +306,8 @@
 			display: none;
 		}
 		.right:global(.scrolls) .answer {
-			background: var(--gok-color-bg, var(--gok-color-surface));
+			background: var(--gok-background);
+			background-attachment: fixed;
 		}
 		/* If the details make the column scroll, the verdict stays at its top. */
 		.answer {
@@ -318,6 +328,7 @@
 		color: var(--gok-color-text-muted);
 	}
 	.rank .extra {
+		font-family: var(--gok-font-family-mono);
 		color: var(--gok-color-text-muted);
 		font-size: var(--gok-type-body-small-size, 14px);
 	}
@@ -405,6 +416,7 @@
 			font-weight: var(--gok-font-weight-semibold, 600);
 		}
 		.dock-lead {
+			white-space: nowrap;
 			font-family: var(--gok-font-family-mono);
 			color: var(--gok-color-primary);
 			font-variant-numeric: tabular-nums;
@@ -412,10 +424,7 @@
 		}
 		.dock-cta {
 			flex: none;
-			padding: var(--gok-space-200, 8px) var(--gok-space-300, 12px);
-			border: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
-			border-radius: var(--gok-radius-s);
-			font-size: var(--gok-type-body-small-size, 14px);
+			color: var(--gok-color-text-muted);
 		}
 	}
 	.statement {
