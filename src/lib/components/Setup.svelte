@@ -34,11 +34,6 @@
 	type Field = HTMLElement & { checked?: boolean; value?: string };
 
 	const i = $derived(model.inputs);
-	// Plans B and C may go below the legal minimum to explore; say so instead of blocking it.
-	const belowMin = (rate: number) =>
-		model.loanAmount > 0 && rate < model.requirements.totalMinimum
-			? `Below the ${model.requirements.totalMinimum.toFixed(1)}% legal minimum`
-			: '';
 </script>
 
 <section class="block" aria-labelledby="loan-h">
@@ -66,7 +61,7 @@
 			onchange={restore('downPayment')}
 		></gok-number-input>
 		<gok-number-input
-			label="Interest rate (%)"
+			label="Interest rate (%/yr)"
 			value={i.interestRate}
 			min="0"
 			max="20"
@@ -76,10 +71,11 @@
 		></gok-number-input>
 	</div>
 	<p class="summary">
-		Loan <b>{formatCurrency(model.loanAmount)}</b> · LTV <b>{model.ltv.toFixed(1)}%</b><br />
+		Loan <b>{formatCurrency(model.loanAmount)}</b> · Loan-to-value <b>{model.ltv.toFixed(1)}%</b><br
+		/>
 		Min amortization
 		<b
-			>{#if model.loanAmount > 0}{model.requirements.totalMinimum.toFixed(1)}%/yr{:else}–{/if}</b
+			>{#if model.loanAmount > 0}{model.minAmortization.toFixed(1)}%/yr{:else}–{/if}</b
 		>
 		<gok-button
 			variant="tertiary"
@@ -108,29 +104,18 @@
 					<gok-segmented-item value="1">One borrower</gok-segmented-item>
 					<gok-segmented-item value="2">Two borrowers</gok-segmented-item>
 				</gok-segmented>
-				<div class="fields">
-					{#if i.legacy}
-						<gok-number-input
-							label="Household income (SEK/yr)"
-							value={i.annualSalary}
-							min="0"
-							helper="All borrowers, before tax"
-							locale="sv-SE"
-							step="10000"
-							oninput={set('annualSalary')}
-							onchange={restore('annualSalary')}
-						></gok-number-input>
-					{/if}
+				{#if i.legacy}
 					<gok-number-input
-						label="Monthly fee / avgift (SEK)"
-						value={i.monthlyFee}
+						label="Household income (SEK/yr)"
+						value={i.annualSalary}
 						min="0"
+						helper="All borrowers, before tax"
 						locale="sv-SE"
-						step="100"
-						oninput={set('monthlyFee')}
-						onchange={restore('monthlyFee')}
+						step="10000"
+						oninput={set('annualSalary')}
+						onchange={restore('annualSalary')}
 					></gok-number-input>
-				</div>
+				{/if}
 			</div>
 		</gok-accordion-item>
 	</gok-accordion>
@@ -140,7 +125,6 @@
 	<h2 class="gok-headline-5" id="plans-h">Your plans</h2>
 	<gok-number-input
 		label="Investment return (%/yr)"
-		helper="Before ISK tax"
 		value={i.investmentReturn}
 		min="0"
 		max="20"
@@ -158,39 +142,33 @@
 			<div class="fields">
 				{#if s.id === 'A'}
 					<gok-number-input
-						label="Amortization (%)"
+						label="Amortization (%/yr)"
 						value={i.aRate}
 						min="0"
 						max="10"
 						step="0.1"
-						error={model.meetsRequirement
-							? ''
-							: `Minimum is ${model.requirements.totalMinimum.toFixed(1)}%`}
+						error={model.meetsRequirement ? '' : `Minimum is ${model.minAmortization.toFixed(1)}%`}
 						oninput={set('aRate')}
 						onchange={restore('aRate')}
 					></gok-number-input>
 				{:else if s.id === 'B'}
 					<gok-number-input
-						label="Amortization (%)"
+						label="Amortization (%/yr)"
 						value={i.bRate}
 						min="0"
 						max="10"
 						step="0.1"
-						helper={i.bRate >= i.aRate
-							? ''
-							: belowMin(i.bRate) || `Invests ${formatCurrency(s.invest)} a month`}
-						error={i.bRate >= i.aRate ? `Must be below Pay it down's ${i.aRate}%` : ''}
+						helper={i.bRate < i.aRate ? `Invests ${formatCurrency(s.invest)} a month` : ''}
 						oninput={set('bRate')}
 						onchange={restore('bRate')}
 					></gok-number-input>
 				{:else}
 					<gok-number-input
-						label="Amortization (%)"
+						label="Amortization (%/yr)"
 						value={i.cRate}
 						min="0"
 						max="10"
 						step="0.1"
-						helper={belowMin(i.cRate)}
 						oninput={set('cRate')}
 						onchange={restore('cRate')}
 					></gok-number-input>
@@ -225,9 +203,11 @@
 				>Source: Regeringen<span class="vh">{' (opens in a new tab)'}</span> ↗</a
 			>
 		{/if}
-		<br />Your LTV is {model.ltv.toFixed(1)}%{#if i.legacy}{' and your LTI '}{model.lti.toFixed(
-				2
-			)}×{/if}, so the minimum is {model.requirements.totalMinimum.toFixed(1)}% a year.
+		<br />Your loan-to-value is {model.ltv.toFixed(
+			1
+		)}%{#if i.legacy}{' and your debt-to-income '}{model.lti.toFixed(2)}×{/if}, so the minimum is {model.minAmortization.toFixed(
+			1
+		)}% a year.
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
@@ -250,11 +230,6 @@
 			</li>
 		{/if}
 	</ul>
-	<gok-button
-		slot="footer"
-		variant="secondary"
-		{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = false))}>Close</gok-button
-	>
 </gok-dialog>
 
 <style>
@@ -275,14 +250,14 @@
 		color: var(--gok-color-text-muted);
 		font-size: var(--gok-type-body-small-size, 14px);
 	}
+	.options gok-number-input {
+		inline-size: 100%;
+	}
 	.options {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--gok-space-400, 16px);
-		inline-size: 100%;
-	}
-	.options .fields {
 		inline-size: 100%;
 	}
 	.fields {

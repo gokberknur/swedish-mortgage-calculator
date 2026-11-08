@@ -1,15 +1,9 @@
 /**
- * Swedish mortgage calculation engine.
- *
- * A DOM-free port of the original vanilla-JS calculator. The original model's
- * quirks are preserved deliberately:
- *   1. Amortization is straight-line on the ORIGINAL loan (fixed kr/month).
- *   2. Headline monthly interest uses the full original balance (does not decline);
- *      only the simulation helpers use a declining balance.
- *   3. Monthly fee (avgift) is excluded from all cumulative/total/net-position math.
- *
- * Rules are the ones in force since 1 April 2026 (90% bolånetak, no income-based extra
- * amortization), with a `legacy` flag for loans taken before that date.
+ * Swedish mortgage maths, no UI. Model assumptions:
+ *   1. Amortization is straight-line on the original loan (fixed kr/month).
+ *   2. The headline monthly interest uses the original balance; `interestOver` uses the declining one.
+ *   3. The monthly fee (avgift) is left out of every total and of net position.
+ * Rules are the ones in force since 1 April 2026, with a `legacy` flag for older loans.
  */
 
 /** The date the current Swedish mortgage rules took effect. */
@@ -23,7 +17,7 @@ export function minDownShare(legacy = false): number {
 }
 
 /** Ränteavdrag threshold: 30% on the first 100 000 kr of yearly interest per borrower, 21% above. */
-export const RANTEAVDRAG_THRESHOLD = 100_000;
+const RANTEAVDRAG_THRESHOLD = 100_000;
 
 /** Yearly tax reduction for `annualInterest` kr of interest, shared equally by `borrowers`. */
 export function annualTaxReduction(annualInterest: number, borrowers = 1): number {
@@ -109,92 +103,36 @@ export function calculateLTI(loanAmount: number, annualSalary: number): number {
 	return loanAmount / annualSalary;
 }
 
-export interface AmortRequirement {
-	ltvRequirement: number;
-	ltiRequirement: number;
-	totalMinimum: number;
-}
-
 /**
- * Amorteringskrav: Sweden's mandatory amortization minimum.
+ * Amorteringskrav: Sweden's mandatory amortization minimum, in %/yr.
  *   LTV > 70%  → 2%/yr,  50–70% → 1%/yr,  < 50% → 0%.
  *   Loans taken before 1 April 2026 (`legacy`) also keep: LTI > 4.5× → +1%/yr.
  */
-export function calculateSwedishAmortization(
-	ltv: number,
-	lti: number,
-	legacy = false
-): AmortRequirement {
-	let ltvRequirement = 0;
-	let ltiRequirement = 0;
-
-	if (ltv > 70) {
-		ltvRequirement = 2;
-	} else if (ltv >= 50) {
-		ltvRequirement = 1;
-	}
-
-	if (legacy && lti > 4.5) {
-		ltiRequirement = 1;
-	}
-
-	return {
-		ltvRequirement,
-		ltiRequirement,
-		totalMinimum: ltvRequirement + ltiRequirement
-	};
+export function calculateSwedishAmortization(ltv: number, lti: number, legacy = false): number {
+	return (ltv > 70 ? 2 : ltv >= 50 ? 1 : 0) + (legacy && lti > 4.5 ? 1 : 0);
 }
 
-export interface Scenario {
-	loanAmount: number;
-	monthlyInterest: number;
-	monthlyAmortization: number;
-	monthlyTaxBenefit: number;
-	totalMonthly: number;
-	payoffTime: PayoffTime;
-}
-
-export function calculateScenario(
-	loanAmount: number,
-	interestRate: number,
-	amortizationRate: number,
-	borrowers = 1
-): Scenario {
-	const monthlyInterest = calculateMonthlyInterest(loanAmount, interestRate);
-	const monthlyAmortization = calculateMonthlyAmortization(loanAmount, amortizationRate);
-	const monthlyTaxBenefit = calculateMonthlyTaxBenefit(monthlyInterest, borrowers);
-	const payoffTime = calculatePayoffTime(loanAmount, monthlyAmortization);
-
-	return {
-		loanAmount,
-		monthlyInterest,
-		monthlyAmortization,
-		monthlyTaxBenefit,
-		totalMonthly: monthlyInterest + monthlyAmortization,
-		payoffTime
-	};
-}
-
-/** Total interest over `months`, on a DECLINING balance with fixed amortization. */
-export function calculateTotalInterestPaid(
-	initialLoan: number,
+/**
+ * Interest over `months` on a declining balance with fixed amortization, the ränteavdrag on it, and
+ * the balance left at the end.
+ */
+export function interestOver(
+	loan: number,
 	monthlyAmortization: number,
-	annualInterestRate: number,
-	months: number
-): number {
-	if (monthlyAmortization <= 0 || months <= 0 || initialLoan <= 0) return 0;
-
-	let remainingBalance = initialLoan;
-	let totalInterest = 0;
-	const monthlyRate = annualInterestRate / 100 / 12;
-
-	for (let i = 0; i < months; i++) {
-		if (remainingBalance <= 0) break;
-		totalInterest += remainingBalance * monthlyRate;
-		remainingBalance -= monthlyAmortization;
+	annualRate: number,
+	months: number,
+	borrowers = 1
+) {
+	let balance = loan;
+	let interest = 0;
+	let deduction = 0;
+	for (let i = 0; i < months && balance > 0; i++) {
+		const m = (balance * annualRate) / 1200;
+		interest += m;
+		deduction += calculateMonthlyTaxBenefit(m, borrowers);
+		balance = Math.max(0, balance - monthlyAmortization);
 	}
-
-	return totalInterest;
+	return { interest, deduction, balance };
 }
 
 /** Future value of an ordinary annuity (contribution at the end of each month). */
@@ -211,152 +149,6 @@ export function calculateInvestmentGrowth(
 	}
 
 	return monthlyContribution * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate);
-}
-
-export interface LoanPaymentMonth {
-	month: number;
-	remainingLoan: number;
-	monthlyInterest: number;
-	monthlyAmortization: number;
-	monthlyTaxBenefit: number;
-	cumulativeInterest: number;
-	cumulativeAmortization: number;
-	cumulativeTaxBenefit: number;
-	isPayoff: boolean;
-}
-
-export interface LoanSimulation {
-	results: LoanPaymentMonth[];
-	payoffMonth: number | null;
-}
-
-export function simulateLoanPayments(
-	initialLoan: number,
-	annualInterestRate: number,
-	annualAmortizationRate: number,
-	months: number,
-	borrowers = 1
-): LoanSimulation {
-	const results: LoanPaymentMonth[] = [];
-	let remainingLoan = initialLoan;
-	let cumulativeInterest = 0;
-	let cumulativeAmortization = 0;
-	let cumulativeTaxBenefit = 0;
-	const monthlyAmortization = (initialLoan * (annualAmortizationRate / 100)) / 12;
-	let payoffMonth: number | null = null;
-
-	for (let month = 0; month <= months; month++) {
-		const monthlyInterest = (remainingLoan * (annualInterestRate / 100)) / 12;
-		const monthlyAmortPayment =
-			remainingLoan > 0 ? Math.min(monthlyAmortization, remainingLoan) : 0;
-		const monthlyTaxBenefit = calculateMonthlyTaxBenefit(monthlyInterest, borrowers);
-
-		if (month > 0) {
-			cumulativeInterest += monthlyInterest;
-			const actualAmortPaid = Math.min(monthlyAmortization, remainingLoan);
-			cumulativeAmortization += actualAmortPaid;
-			cumulativeTaxBenefit += monthlyTaxBenefit;
-			remainingLoan = Math.max(0, remainingLoan - monthlyAmortization);
-		}
-
-		results.push({
-			month,
-			remainingLoan,
-			monthlyInterest,
-			monthlyAmortization: monthlyAmortPayment,
-			monthlyTaxBenefit,
-			cumulativeInterest,
-			cumulativeAmortization,
-			cumulativeTaxBenefit,
-			isPayoff: false
-		});
-
-		if (remainingLoan === 0 && month > 0 && payoffMonth === null) {
-			payoffMonth = month;
-			results[results.length - 1].isPayoff = true;
-		}
-	}
-
-	return { results, payoffMonth };
-}
-
-export interface ScheduleRow {
-	month: number;
-	monthlyInterest: number;
-	monthlyAmortization: number;
-	monthlyInvestment: number;
-	investmentValue: number;
-	monthlyTotal: number;
-}
-
-export interface ScenarioSchedule {
-	rows: ScheduleRow[];
-	totalInterest: number;
-	totalAmortization: number;
-	totalInvested: number;
-	finalInvestmentValue: number;
-	totalPaid: number;
-}
-
-/**
- * Month-by-month payment schedule (default 60 months), matching the original
- * `generateScenarioTable`. Note the ordering quirk: the investment is compounded
- * THEN the contribution is added (`value*(1+r) + contribution`).
- */
-export function buildScenarioSchedule(
-	initialLoan: number,
-	interestRate: number,
-	amortizationRate: number,
-	monthlyInvestment: number,
-	investmentReturn: number,
-	months = 60
-): ScenarioSchedule {
-	const rows: ScheduleRow[] = [];
-	let currentLoan = initialLoan;
-	let investmentValue = 0;
-	let totalInterest = 0;
-	let totalAmortization = 0;
-	let totalInvested = 0;
-	let totalPaid = 0;
-
-	const monthlyReturnRate = investmentReturn / 100 / 12;
-
-	for (let month = 1; month <= months; month++) {
-		const monthlyInterest = calculateMonthlyInterest(currentLoan, interestRate);
-		const monthlyAmortization = Math.min(
-			calculateMonthlyAmortization(initialLoan, amortizationRate),
-			currentLoan
-		);
-
-		investmentValue = investmentValue * (1 + monthlyReturnRate) + monthlyInvestment;
-
-		const monthlyTotal = monthlyInterest + monthlyAmortization + monthlyInvestment;
-
-		totalInterest += monthlyInterest;
-		totalAmortization += monthlyAmortization;
-		totalInvested += monthlyInvestment;
-		totalPaid += monthlyTotal;
-
-		rows.push({
-			month,
-			monthlyInterest,
-			monthlyAmortization,
-			monthlyInvestment,
-			investmentValue,
-			monthlyTotal
-		});
-
-		currentLoan = Math.max(0, currentLoan - monthlyAmortization);
-	}
-
-	return {
-		rows,
-		totalInterest,
-		totalAmortization,
-		totalInvested,
-		finalInvestmentValue: investmentValue,
-		totalPaid
-	};
 }
 
 export interface NetPositionInput {
@@ -379,18 +171,20 @@ export interface NetPositionInput {
  * invested or kept, so it counts against the plan. The baseline itself always scores 0.
  */
 export function netPosition(p: NetPositionInput): number {
-	const b = p.borrowers ?? 1;
 	const at = (rate: number) =>
-		simulateLoanPayments(p.loanAmount, p.interestRate, rate, p.month, b).results[p.month];
+		interestOver(
+			p.loanAmount,
+			calculateMonthlyAmortization(p.loanAmount, rate),
+			p.interestRate,
+			p.month,
+			p.borrowers
+		);
 	const plan = at(p.amortizationRate);
 	const base = at(p.baselineRate);
-	const extraInterest =
-		plan.cumulativeInterest -
-		plan.cumulativeTaxBenefit -
-		(base.cumulativeInterest - base.cumulativeTaxBenefit);
+	const extraInterest = plan.interest - plan.deduction - (base.interest - base.deduction);
 	return (
 		calculateInvestmentGrowth(p.monthlyInvestment, p.investmentReturn, p.month) -
-		plan.remainingLoan -
+		plan.balance -
 		extraInterest
 	);
 }
