@@ -34,7 +34,7 @@
 <gok-dialog
 	bind:this={el}
 	heading={title}
-	scale="60 months"
+	scale="Payment schedule · 60 months"
 	size="l"
 	style="--gok-dialog-max-inline-size: 52rem"
 	use:onCloseEvent={onclose}
@@ -47,7 +47,7 @@
 				<thead>
 					<tr>
 						<th>Month</th>
-						<th>Payment (excl. avgift)</th>
+						<th>Monthly outlay</th>
 						<th>Interest (before ränteavdrag)</th>
 						<th>Amortization</th>
 						<th>Investment</th>

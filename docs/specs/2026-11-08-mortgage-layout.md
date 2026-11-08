@@ -107,3 +107,25 @@ All fixed:
   (before ränteavdrag)".
 - LOW: pinned table labels follow the results column width; the bottom bar comes right after the
   inputs in tab order; non-winning bars are quieter in dark mode.
+
+### Round 2: Block (0 HIGH, 3 MEDIUM, 5 LOW)
+
+Fixed:
+
+- MEDIUM: at 1280×800, focusing a plan field scrolled the page and the verdict out of view. The
+  ranking (winner and all three net positions) now pins to the top of the results column on wide
+  screens; checked with focus on every input.
+- MEDIUM: the phone bar dropped the verdict's warnings. It now adds "⚠ Below the legal minimum" or
+  "⚠ Costs N kr more a month".
+- MEDIUM: the Regeringen link replaced the calculator and lost every input. It opens in a new tab
+  and says so.
+- LOW: the bar's focus clearance follows its measured height (it grows with a warning at 320px);
+  the schedule dialog's title is the plan name with "Payment schedule · 60 months" beneath, and its
+  first column says "Monthly outlay" like the rest of the page; LTV shows one decimal everywhere;
+  the "60-month schedule" buttons line up.
+
+Not changed:
+
+- LOW: the comparison table keeps its tab stop at wide widths where it does not scroll. Harmless,
+  and adding it conditionally needs a resize listener.
+- LOW: chart names stay short ("B · Invest"); full titles truncate at the line ends on phones.

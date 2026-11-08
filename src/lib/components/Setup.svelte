@@ -123,7 +123,7 @@
 		<span class="meta-label">Loan</span>
 		<span class="v">{formatCurrency(model.loanAmount)}</span>
 		<span class="meta-label">LTV</span>
-		<span class="v">{model.ltv.toFixed(0)}%</span>
+		<span class="v">{model.ltv.toFixed(1)}%</span>
 		<span class="meta-label">Min amortization</span>
 		<span class="v"
 			>{#if model.loanAmount > 0}{model.requirements.totalMinimum.toFixed(1)}%/yr{:else}–{/if}</span
@@ -225,7 +225,11 @@
 		{#if i.legacy}
 			Rules for loans taken before {RULES_DATE}.
 		{:else}
-			Rules in force since {RULES_DATE} (<a href={RULES_SOURCE} rel="noreferrer">Regeringen</a>).
+			Rules in force since {RULES_DATE} (<a
+				href={RULES_SOURCE}
+				target="_blank"
+				rel="noopener noreferrer">Regeringen (opens in a new tab)</a
+			>).
 		{/if}
 		Your situation: LTV {model.ltv.toFixed(1)}%{#if i.legacy}, LTI {model.lti.toFixed(2)}×{/if}
 		→ minimum {model.requirements.totalMinimum.toFixed(1)}%/yr.

@@ -60,6 +60,19 @@
 		return () => io.disconnect();
 	}
 
+	// Focused fields scroll clear of the bar instead of hiding behind it, whatever its height.
+	function padForDock(node: HTMLElement) {
+		const root = document.documentElement;
+		const ro = new ResizeObserver(() => {
+			root.style.scrollPaddingBottom = `${node.offsetHeight + 8}px`;
+		});
+		ro.observe(node);
+		return () => {
+			ro.disconnect();
+			root.style.scrollPaddingBottom = '';
+		};
+	}
+
 	const netAt = (id: ScenarioId) =>
 		id === 'A'
 			? 0
@@ -76,16 +89,18 @@
 		const best = m.scenarios.find((s) => s.id === win);
 		const a = m.scenarios[0];
 		if (!best || m.verdict!.lead < 1) return [];
-		const out: string[] = [];
+		const out: { long: string; short: string }[] = [];
 		if (best.rate < m.requirements.totalMinimum)
-			out.push(
-				`${best.title} amortizes ${best.rate}%, below the ${m.requirements.totalMinimum.toFixed(1)}% legal minimum, so a bank would not allow it.`
-			);
+			out.push({
+				long: `${best.title} amortizes ${best.rate}%, below the ${m.requirements.totalMinimum.toFixed(1)}% legal minimum, so a bank would not allow it.`,
+				short: 'Below the legal minimum'
+			});
 		const extra = best.mortgageCost - a.mortgageCost;
 		if (extra >= 1)
-			out.push(
-				`It also costs ${formatCurrency(extra)} more a month than Pay it down, which explains part of its lead.`
-			);
+			out.push({
+				long: `It costs ${formatCurrency(extra)} more a month than Pay it down, which explains part of its lead.`,
+				short: `Costs ${formatCurrency(extra)} more a month`
+			});
 		return out;
 	});
 	// gok-chart colours series 1-3 (A, B, C) from these tokens: the winner gets the one accent,
@@ -123,13 +138,16 @@
 		<Setup model={m} />
 	</aside>
 	{#if m.verdict && !resultsInView}
-		<a class="dock" href="#results">
+		<a class="dock" href="#results" {@attach padForDock}>
 			<span>
 				<b
 					>{#if m.verdict.lead < 1}The plans finish level{:else}{m.verdict.best.title} ahead{/if}</b
 				>
 				{#if m.verdict.lead >= 1}<span class="dock-lead"
 						>+{formatCurrency(m.verdict.lead)} vs the next plan</span
+					>{/if}
+				{#if caveats.length}<span class="dock-warn"
+						>⚠ {caveats.map((c) => c.short).join(' · ')}</span
 					>{/if}
 			</span>
 			<span class="dock-cta">See results</span>
@@ -161,21 +179,25 @@
 					</p>
 				{/if}
 				{#if caveats.length}
-					<gok-alert status="warning" class="caveat">{caveats.join(' ')}</gok-alert>
+					<gok-alert status="warning" class="caveat"
+						>{caveats.map((c) => c.long).join(' ')}</gok-alert
+					>
 				{/if}
-				<ol class="rank" aria-label="Net position by plan">
-					{#each ranked as r (r.id)}
-						<li class:win={win === r.id}>
-							<span class="tag" aria-hidden="true">{r.tag}</span>
-							<span class="name">{r.title}</span>
-							<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
-							<span class="bar" aria-hidden="true"
-								><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
-							>
-						</li>
-					{/each}
-				</ol>
 			</section>
+			<ol class="rank" aria-label="Net position by plan">
+				{#each ranked as r (r.id)}
+					<li class:win={win === r.id}>
+						<span class="tag" aria-hidden="true">{r.tag}</span>
+						<span class="name"
+							>{r.title}{#if win === r.id}<span class="meta-label">{' · best'}</span>{/if}</span
+						>
+						<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
+						<span class="bar" aria-hidden="true"
+							><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
+						>
+					</li>
+				{/each}
+			</ol>
 
 			<section class="block">
 				<div class="block-head"><h2 class="gok-headline-4">How they compare</h2></div>
@@ -368,9 +390,7 @@
 
 <ScheduleDialog
 	open={openSched !== ''}
-	title={openSched
-		? `${m.scenarios.find((s) => s.id === openSched)?.title} · payment schedule`
-		: ''}
+	title={openSched ? (m.scenarios.find((s) => s.id === openSched)?.title ?? '') : ''}
 	schedule={openSched ? m.schedules[openSched] : null}
 	onclose={() => (openSched = '')}
 />
@@ -450,6 +470,23 @@
 		font-size: 0.75rem;
 		font-weight: var(--gok-font-weight-semibold, 600);
 	}
+	/* Wide screens: the ranking pins to the top of the results, so the answer stays in view
+	   whichever input you are editing. */
+	@media (min-width: 900px) {
+		.rank {
+			position: sticky;
+			top: 0;
+			z-index: 2;
+			max-inline-size: none;
+			padding-block: var(--gok-space-300, 12px);
+			background: var(--gok-color-surface-overlay, var(--gok-color-surface));
+			backdrop-filter: var(--gok-surface-backdrop, none);
+			border-bottom: 1px solid var(--gok-color-border);
+		}
+		.rank li {
+			max-inline-size: 36rem;
+		}
+	}
 	.rank .val {
 		font-variant-numeric: tabular-nums;
 	}
@@ -500,10 +537,6 @@
 			color: var(--gok-color-text);
 			text-decoration: none;
 		}
-		/* Focused fields scroll clear of the bar instead of hiding behind it. */
-		:global(html) {
-			scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
-		}
 		.dock b {
 			display: block;
 			font-weight: var(--gok-font-weight-semibold, 600);
@@ -512,6 +545,11 @@
 			color: var(--gok-color-primary);
 			font-variant-numeric: tabular-nums;
 			font-size: var(--gok-type-body-small-size, 14px);
+		}
+		.dock-warn {
+			display: block;
+			font-size: var(--gok-type-body-small-size, 14px);
+			color: var(--gok-color-status-warning-text, var(--gok-color-text));
 		}
 		.dock-cta {
 			flex: none;
@@ -643,6 +681,14 @@
 		.breakdown.two {
 			grid-template-columns: 1fr;
 		}
+	}
+	.bd-col {
+		display: flex;
+		flex-direction: column;
+	}
+	.bd-col gok-button {
+		margin-top: auto;
+		align-self: flex-start;
 	}
 	.bd-col h3 {
 		margin: 0 0 var(--gok-space-300, 12px);
