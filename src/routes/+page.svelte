@@ -54,7 +54,8 @@
 			out.push(
 				`${refused.map((s) => s.title).join(' and ')} ${refused.length > 1 ? 'are' : 'is'} below the ${m.minAmortization.toFixed(1)}% minimum`
 			);
-		if (i.bRate >= i.aRate) out.push('Invest the difference needs a lower rate than Pay it down');
+		if (i.bRate >= i.aRate)
+			out.push('Invest the difference needs less amortization than Pay it down');
 		return out.length ? `${out.join('. ')}.` : '';
 	});
 	// A winner that also costs more each month says so on its row.
@@ -79,6 +80,13 @@
 		...ranked,
 		...m.scenarios.filter((s) => !ranked.some((r) => r.id === s.id))
 	]);
+	const headline = $derived(
+		ranked.length === 1
+			? 'Only Pay it down qualifies.'
+			: (m.verdict?.lead ?? 0) < 1
+				? 'The plans come out even.'
+				: `${best?.title} comes out ahead.`
+	);
 	const winNet = $derived(win && cmp ? cmp.same[win].net : 0);
 </script>
 
@@ -95,18 +103,28 @@
 	<p>Pay off your mortgage faster, or invest instead?</p>
 </div>
 
+<!-- Always present, so a returning answer is announced; empty while the inputs are invalid. -->
+<p class="vh" role="status">
+	{#if cmp && best && !invalid}{headline}{#if win !== 'A'}{` ${signed(winNet)} vs Pay it down.`}{/if}{/if}
+</p>
+
 <div
 	class="split"
 	{@attach (n: HTMLElement) => {
-		// Space below the grid (footer, padding): the pinned column must fit above it at the page end.
+		// The pinned column leaves room for the footer only once the footer is on screen.
 		const set = () =>
 			n.style.setProperty(
 				'--below',
-				`${document.documentElement.scrollHeight - (n.getBoundingClientRect().bottom + scrollY)}px`
+				`${Math.max(0, innerHeight - n.getBoundingClientRect().bottom)}px`
 			);
+		set();
 		const ro = new ResizeObserver(set);
 		ro.observe(document.body);
-		return () => ro.disconnect();
+		addEventListener('scroll', set, { passive: true });
+		return () => {
+			ro.disconnect();
+			removeEventListener('scroll', set);
+		};
 	}}
 >
 	<aside class="inputs" aria-label="Your numbers">
@@ -117,7 +135,6 @@
 			<span>
 				<b>{ranked.length === 1 ? 'Only Pay it down qualifies' : `${best.title} ahead`}</b>
 				{#if win !== 'A'}<span class="dock-lead">{signed(winNet)} vs Pay it down</span>{/if}
-				{#if note}<span class="dock-warn">⚠ {note}</span>{/if}
 			</span>
 			<span class="dock-cta">See results</span>
 		</a>
@@ -128,16 +145,10 @@
 			{#if cmp && best && !invalid}
 				<section class="verdict">
 					<span class="meta-label">In {cmp.payoffDisplay}</span>
-					<h2 class="statement">
-						<span role="status">
-							{#if ranked.length === 1}Only Pay it down qualifies.{:else if m.verdict!.lead < 1}The
-								plans come out even.{:else}{best.title}
-								comes out ahead.{#if win !== 'A'}<span class="vh"
-										>{` ${signed(winNet)} vs Pay it down.`}</span
-									>{/if}{/if}
-						</span>
-					</h2>
-					{#if win !== 'A'}<p class="lead">{signed(winNet)} vs Pay it down</p>{/if}
+					<h2 class="statement">{headline}</h2>
+					{#if win !== 'A'}<p class="lead" aria-hidden="true">
+							{signed(winNet)} vs Pay it down
+						</p>{/if}
 				</section>
 			{/if}
 		</div>
@@ -195,11 +206,6 @@
 												>{/each}</tr
 										>
 									{/each}
-									<tr class="net"
-										><th scope="row">Net position</th>{#each columns as s (s.id)}<td
-												class:win={win === s.id}>{signed(cmp.same[s.id].net)}</td
-											>{/each}</tr
-									>
 								</tbody>
 							</table>
 						</div>
@@ -278,6 +284,13 @@
 		.lead {
 			display: none;
 		}
+		/* If the details make the column scroll, the verdict stays at its top. */
+		.answer {
+			position: sticky;
+			top: 0;
+			z-index: 1;
+			background: var(--gok-color-bg, var(--gok-color-surface));
+		}
 	}
 	.lead {
 		margin: var(--gok-space-300, 12px) 0 0;
@@ -293,6 +306,9 @@
 	.rank .extra {
 		color: var(--gok-color-text-muted);
 		font-size: var(--gok-type-body-small-size, 14px);
+	}
+	.answer:empty {
+		display: none;
 	}
 	.rank-cap {
 		margin: 0 0 var(--gok-space-300, 12px);
@@ -325,6 +341,7 @@
 		font-size: var(--gok-type-body-small-size, 14px);
 	}
 	.rank .val {
+		font-family: var(--gok-font-family-mono);
 		font-variant-numeric: tabular-nums;
 	}
 	.rank .bar {
@@ -378,10 +395,6 @@
 			font-variant-numeric: tabular-nums;
 			font-size: var(--gok-type-body-small-size, 14px);
 		}
-		.dock-warn {
-			display: block;
-			font-size: var(--gok-type-body-small-size, 14px);
-		}
 		.dock-cta {
 			flex: none;
 			padding: var(--gok-space-200, 8px) var(--gok-space-300, 12px);
@@ -400,6 +413,9 @@
 		max-width: 18ch;
 	}
 	/* gok-accordion-item sizes slotted content to itself, so the table claims the full width. */
+	.table-scroll:focus-visible {
+		outline-offset: -2px;
+	}
 	.table-scroll {
 		inline-size: 100%;
 		overflow-x: auto;
@@ -411,6 +427,7 @@
 	}
 	.compare th,
 	.compare td {
+		font-family: var(--gok-font-family-mono);
 		padding: var(--gok-space-300, 12px);
 		text-align: right;
 		border-bottom: 1px solid var(--gok-color-border);
@@ -449,10 +466,6 @@
 			white-space: normal;
 			min-inline-size: 5rem;
 		}
-	}
-	.compare .net td {
-		font-weight: var(--gok-font-weight-semibold, 600);
-		font-size: var(--gok-type-body-large-size, 18px);
 	}
 	.compare .win {
 		box-shadow: inset 2px 0 0 0 var(--gok-color-primary);
