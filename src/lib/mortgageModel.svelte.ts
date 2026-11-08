@@ -17,12 +17,10 @@ import {
 	calculatePayoffTime,
 	interestOver,
 	calculateInvestmentGrowth,
-	buildScenarioSchedule,
 	formatCurrency,
 	minDownShare,
 	netPosition,
-	type PayoffTime,
-	type ScenarioSchedule
+	type PayoffTime
 } from './mortgage';
 
 export type ScenarioId = 'A' | 'B' | 'C';
@@ -36,7 +34,6 @@ export interface ScenarioRow {
 	amort: number;
 	invest: number;
 	mortgageCost: number;
-	total: number;
 	payoff: PayoffTime;
 }
 
@@ -44,13 +41,6 @@ export interface PlanResult {
 	interestPaid: number;
 	investment: number;
 	net: number;
-}
-
-export interface PlanPayoff {
-	interestPaid: number;
-	investment: number;
-	totalPaid: number;
-	payoffDisplay: string;
 }
 
 const META: Record<ScenarioId, { title: string; tag: string; desc: string }> = {
@@ -71,16 +61,12 @@ const META: Record<ScenarioId, { title: string; tag: string; desc: string }> = {
 	}
 };
 
-/** Chart series names: the plan letters used everywhere else, so line-end labels never truncate. */
-const SHORT: Record<ScenarioId, string> = { A: 'A', B: 'B', C: 'C' };
-
 export function createMortgageModel() {
 	const inputs = $state({
 		propertyValue: 4000000,
 		downPayment: 600000,
 		annualSalary: 600000,
 		interestRate: 3.0,
-		monthlyFee: 3000,
 		aRate: 3.0,
 		bRate: 2.0,
 		cRate: 2.5,
@@ -125,7 +111,6 @@ export function createMortgageModel() {
 			amort: amortA,
 			invest: 0,
 			mortgageCost: monthlyInterest + amortA,
-			total: monthlyInterest + amortA + inputs.monthlyFee,
 			payoff: calculatePayoffTime(loanAmount, amortA)
 		},
 		{
@@ -135,7 +120,6 @@ export function createMortgageModel() {
 			amort: amortB,
 			invest: investB,
 			mortgageCost: monthlyInterest + amortB + investB,
-			total: monthlyInterest + amortB + investB + inputs.monthlyFee,
 			payoff: calculatePayoffTime(loanAmount, amortB)
 		},
 		{
@@ -145,7 +129,6 @@ export function createMortgageModel() {
 			amort: amortC,
 			invest: inputs.cInvestmentAmount,
 			mortgageCost: monthlyInterest + amortC + inputs.cInvestmentAmount,
-			total: monthlyInterest + amortC + inputs.cInvestmentAmount + inputs.monthlyFee,
 			payoff: calculatePayoffTime(loanAmount, amortC)
 		}
 	]);
@@ -186,27 +169,24 @@ export function createMortgageModel() {
 		for (const id of ['A', 'B', 'C'] as const)
 			same[id] = { ...at(id, months), net: net(id, months) };
 
-		// Each plan run to its own payoff; null when it never pays off.
-		const full = (id: 'B' | 'C'): PlanPayoff | null => {
-			const payoff = scenarios.find((s) => s.id === id)!.payoff;
-			if (!isFinite(payoff.totalMonths)) return null;
-			const r = at(id, payoff.totalMonths);
-			return { ...r, totalPaid: loanAmount + r.interestPaid, payoffDisplay: payoff.display };
-		};
-
 		return {
 			months,
 			payoffDisplay: a.display,
-			same,
-			full: { B: full('B'), C: full('C') }
+			same
 		};
 	});
 
-	// Plan B only exists when it amortizes less than A; otherwise it has nothing to invest and its
-	// field shows an error, so it sits out of the ranking instead of feeding it a rejected value.
+	// Plan A is the baseline and always ranks. B ranks only when it amortizes less than A (otherwise it
+	// has nothing to invest); B and C rank only at or above the legal minimum a bank would require.
 	const rankedIds = $derived(
-		(['A', 'B', 'C'] as const).filter((id) => id !== 'B' || inputs.bRate < inputs.aRate)
+		(['A', 'B', 'C'] as const).filter(
+			(id) =>
+				id === 'A' ||
+				((loanAmount <= 0 || plans[id] >= minAmortization) &&
+					(id !== 'B' || inputs.bRate < inputs.aRate))
+		)
 	);
+	const plans = $derived({ A: inputs.aRate, B: inputs.bRate, C: inputs.cRate });
 
 	const verdict = $derived.by(() => {
 		if (!comparison) return null;
@@ -215,62 +195,9 @@ export function createMortgageModel() {
 			.sort((x, y) => y.fp - x.fp);
 		return {
 			best: ranked[0],
-			lead: ranked[0].fp - ranked[1].fp,
+			// With one plan left (the others are below the legal minimum) there is no runner-up.
+			lead: ranked.length > 1 ? ranked[0].fp - ranked[1].fp : Infinity,
 			payoff: comparison.payoffDisplay
-		};
-	});
-
-	const schedules = $derived<Record<ScenarioId, ScenarioSchedule>>({
-		A: buildScenarioSchedule(loanAmount, inputs.interestRate, inputs.aRate, 0, 0),
-		B: buildScenarioSchedule(
-			loanAmount,
-			inputs.interestRate,
-			inputs.bRate,
-			investB,
-			inputs.investmentReturn
-		),
-		C: buildScenarioSchedule(
-			loanAmount,
-			inputs.interestRate,
-			inputs.cRate,
-			inputs.cInvestmentAmount,
-			inputs.investmentReturn
-		)
-	});
-
-	const chart = $derived.by(() => {
-		if (!comparison) return null;
-		const horizon = Math.min(comparison.months, 600);
-		if (horizon < 2) return null;
-
-		const plans = [
-			{ id: 'A' as const, rate: inputs.aRate, monthly: 0 },
-			{ id: 'B' as const, rate: inputs.bRate, monthly: investB },
-			{ id: 'C' as const, rate: inputs.cRate, monthly: inputs.cInvestmentAmount }
-		];
-		const netAt = (p: (typeof plans)[number], month: number) =>
-			netPosition({
-				loanAmount,
-				interestRate: inputs.interestRate,
-				amortizationRate: p.rate,
-				baselineRate: inputs.aRate,
-				monthlyInvestment: p.monthly,
-				investmentReturn: inputs.investmentReturn,
-				month,
-				borrowers: inputs.borrowers
-			});
-
-		// gok-chart data, sampled once a year plus the final month.
-		const months: number[] = [];
-		for (let i = 0; i <= horizon; i += 12) months.push(i);
-		if (months.at(-1) !== horizon) months.push(horizon);
-
-		return {
-			labels: months.map((i) => `${+(i / 12).toFixed(1)} y`),
-			series: plans.map((p) => ({
-				name: SHORT[p.id],
-				values: months.map((i) => Math.round(netAt(p, i)))
-			}))
 		};
 	});
 
@@ -317,12 +244,6 @@ export function createMortgageModel() {
 		},
 		get verdict() {
 			return verdict;
-		},
-		get schedules() {
-			return schedules;
-		},
-		get chart() {
-			return chart;
 		}
 	};
 }

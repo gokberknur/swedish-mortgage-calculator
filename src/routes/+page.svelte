@@ -1,45 +1,22 @@
 <script lang="ts">
-	import { on } from 'svelte/events';
 	import Setup from '$lib/components/Setup.svelte';
-	import ScheduleDialog from '$lib/components/ScheduleDialog.svelte';
 	import { formatCurrency } from '$lib/mortgage';
-	import { createMortgageModel, type ScenarioId } from '$lib/mortgageModel.svelte';
+	import { createMortgageModel } from '$lib/mortgageModel.svelte';
 
 	const m = createMortgageModel();
-	let openSched: ScenarioId | '' = $state('');
-
-	// Compact figures ("1.8M kr") keep the plot usable on phones; exact figures are in the table.
-	// English abbreviations on purpose: Swedish "tn" (tusen) and "bn" (biljon) read as trillion
-	// and billion on this English page, off by up to 1000x.
-	const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
-	const compactKr = (n: number) => `${compact.format(n)} kr`;
-
-	// gok-chart takes its data and formatter as properties, not attributes.
-	let chartEl = $state<
-		(HTMLElement & { data: unknown; format: (n: number) => string }) | undefined
-	>();
-	$effect(() => {
-		if (chartEl && m.chart) {
-			chartEl.format = compactKr;
-			chartEl.data = m.chart;
-		}
-	});
-
-	const i = $derived(m.inputs);
 	const cmp = $derived(m.comparison);
-	const win = $derived(m.verdict?.best.id);
+	const best = $derived(m.verdict?.best);
+	const win = $derived(best?.id);
+
 	// The phone bar hides while the answer or the results are on screen, so it never repeats them.
 	let answerInView = $state(false);
 	let resultsInView = $state(false);
 	const watch = (set: (v: boolean) => void) => (node: HTMLElement) => {
-		const io = new IntersectionObserver(([e]) => set(e.isIntersecting), {
-			rootMargin: '0px 0px -40% 0px'
-		});
+		const io = new IntersectionObserver(([e]) => set(e.isIntersecting));
 		io.observe(node);
 		return () => io.disconnect();
 	};
 
-	// Focused fields scroll clear of the bar instead of hiding behind it, whatever its height.
 	// Pinned bars (the phone dock, the wide-screen ranking) reserve their height in the page's scroll
 	// padding, so a focused field or table scrolls clear of them instead of hiding underneath.
 	const padRoot =
@@ -66,86 +43,66 @@
 			.sort((a, b) => b.net - a.net)
 	);
 	const rankMax = $derived(Math.max(1, ...ranked.map((r) => r.net)));
-	// The verdict must not quietly recommend a plan a bank would refuse, or one that only wins by
-	// spending more each month.
-	const notAllowed = $derived.by(() => {
-		const best = m.scenarios.find((s) => s.id === win);
-		return !!best && best.rate < m.minAmortization;
-	});
-	const caveats = $derived.by(() => {
-		const best = m.scenarios.find((s) => s.id === win);
-		const a = m.scenarios[0];
-		if (!best || m.verdict!.lead < 1) return [];
-		const out: { long: string; short: string }[] = [];
-		if (notAllowed)
-			out.push({
-				long: `A bank won't allow ${best.title}: ${best.rate}% is below the ${m.minAmortization.toFixed(1)}% minimum.`,
-				short: `${best.title} is below the ${m.minAmortization.toFixed(1)}% minimum`
-			});
-		const extra = best.mortgageCost - a.mortgageCost;
-		if (extra >= 1)
-			out.push({
-				long: `${best.title} costs ${formatCurrency(extra)} more a month than Pay it down.`,
-				short: `${best.title} costs ${formatCurrency(extra)} more a month`
-			});
-		return out;
-	});
-	// gok-chart colours series 1-3 (A, B, C) from these tokens: the winner gets the one accent,
-	// the others two greys, so colour never carries the plan on its own (the legend names it).
-	const chartColors = $derived(
-		(['A', 'B', 'C'] as const)
-			.map((id, n) => {
-				// Both non-winners in the muted text grey: it clears 3:1 in both themes; the legend and
-				// line-end labels tell them apart.
-				return `--gok-chart-${n + 1}: ${id === win ? 'var(--gok-color-primary)' : 'var(--gok-color-text-muted)'}`;
-			})
-			.join('; ')
-	);
 	const signed = (n: number) => `${n > 0 ? '+' : ''}${formatCurrency(n)}`;
+
+	// One short line under the ranking: plans a bank would refuse sit out of it, and a winner that
+	// only leads by spending more each month says so.
+	const note = $derived.by(() => {
+		const out: string[] = [];
+		const refused = m.scenarios.filter((s) => s.id !== 'A' && s.rate < m.minAmortization);
+		if (m.loanAmount > 0 && refused.length)
+			out.push(
+				`${refused.map((s) => s.tag).join(', ')} below the ${m.minAmortization.toFixed(1)}% minimum`
+			);
+		const w = m.scenarios.find((s) => s.id === win);
+		const extra = w ? w.mortgageCost - m.scenarios[0].mortgageCost : 0;
+		if (w && extra >= 1) out.push(`${w.title} costs ${formatCurrency(extra)} more a month`);
+		return out.join(' · ');
+	});
+	type Plan = (typeof m.scenarios)[number];
+	const rows: [string, (s: Plan) => string][] = [
+		['Monthly cost', (s) => formatCurrency(s.mortgageCost)],
+		['Amortization / month', (s) => formatCurrency(s.amort)],
+		['Invested / month', (s) => formatCurrency(s.invest)],
+		['Paid off in', (s) => s.payoff.display],
+		['Interest paid, before ränteavdrag', (s) => formatCurrency(cmp?.same[s.id].interestPaid ?? 0)],
+		['Investment value', (s) => formatCurrency(cmp?.same[s.id].investment ?? 0)]
+	];
+	const winNet = $derived(win && cmp ? cmp.same[win].net : 0);
 </script>
 
 <svelte:head>
 	<title>Swedish Mortgage Calculator</title>
 	<meta
 		name="description"
-		content="Pay down faster vs. invest the difference, under Swedish rules."
+		content="Pay off your Swedish mortgage faster, or invest instead? Compare three plans."
 	/>
 </svelte:head>
 
 <div class="page-head">
-	<p class="eyebrow meta-label"><span aria-hidden="true"></span>Tool · Sweden</p>
 	<h1 class="gok-headline-1">Swedish Mortgage Calculator</h1>
 	<p>Pay off your mortgage faster, or invest instead?</p>
 </div>
 
 <div class="split">
 	<div class="answer" {@attach watch((v) => (answerInView = v))}>
-		{#if cmp && m.verdict}
+		{#if cmp && best}
 			{#if m.downPaymentError}
 				<gok-alert status="warning" class="notice"
 					>Banks need at least {m.downShare * 100}% down, so no bank would lend this.</gok-alert
 				>
 			{/if}
 			<section class="verdict">
-				<span class="meta-label">After {m.verdict.payoff}</span>
+				<span class="meta-label">After {cmp.payoffDisplay}</span>
 				<h2 class="statement">
 					<span role="status">
-						{#if m.verdict.lead < 1}The plans come out even.{:else}{m.verdict.best.title} comes out ahead.<span
-								class="vh">{` By ${formatCurrency(m.verdict.lead)}.`}</span
-							>{/if}
+						{#if ranked.length === 1}Only Pay it down meets the minimum.{:else if m.verdict!.lead < 1}The
+							plans come out even.{:else}{best.title}
+							comes out ahead.{#if win !== 'A'}<span class="vh"
+									>{` ${signed(winNet)} vs Pay it down.`}</span
+								>{/if}{/if}
 					</span>
 				</h2>
-				{#if m.verdict.lead >= 1}
-					<p class="lead">
-						+{formatCurrency(m.verdict.lead)}
-						<span>more than {ranked[1].title}</span>
-					</p>
-				{/if}
-				{#if caveats.length}
-					<gok-alert status="warning" class="caveat"
-						>{caveats.map((c) => c.long).join(' ')}</gok-alert
-					>
-				{/if}
 			</section>
 		{/if}
 	</div>
@@ -153,35 +110,27 @@
 	<aside class="inputs" aria-label="Your numbers">
 		<Setup model={m} />
 	</aside>
-	{#if m.verdict && !resultsInView && !answerInView}
+	{#if best && !resultsInView && !answerInView}
 		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
 			<span>
-				<b
-					>{#if m.verdict.lead < 1}The plans come out even{:else}{m.verdict.best.title} ahead{/if}</b
-				>
-				{#if m.verdict.lead >= 1}<span class="dock-lead"
-						>+{formatCurrency(m.verdict.lead)} vs {ranked[1].title}</span
-					>{/if}
-				{#if caveats.length}<span class="dock-warn"
-						>⚠ {caveats.map((c) => c.short).join(' · ')}</span
-					>{/if}
+				<b>{best.title} ahead</b>
+				{#if win !== 'A'}<span class="dock-lead">{signed(winNet)} vs Pay it down</span>{/if}
+				{#if note}<span class="dock-warn">⚠ {note}</span>{/if}
 			</span>
 			<span class="dock-cta">See results</span>
 		</a>
 	{/if}
 
 	<div class="results" id="results" {@attach watch((v) => (resultsInView = v))}>
-		{#if cmp && m.verdict}
+		{#if cmp && best}
 			<div class="rank-wrap" {@attach padRoot('Top', '(min-width: 900px)')}>
-				<p class="meta-label rank-cap" id="rank-cap">Net position vs Pay it down</p>
+				<p class="meta-label rank-cap" id="rank-cap">Net position vs Pay it down, before ISK tax</p>
 				<ol class="rank" aria-labelledby="rank-cap">
 					{#each ranked as r (r.id)}
 						<li class:win={win === r.id}>
 							<span class="tag" aria-hidden="true">{r.tag}</span>
 							<span class="name"
-								>{r.title}{#if win === r.id}<span class="meta-label"
-										>{notAllowed ? '\u00a0·\u00a0not allowed' : '\u00a0·\u00a0best'}</span
-									>{/if}</span
+								>{r.title}{#if win === r.id}<span class="meta-label">{' · best'}</span>{/if}</span
 							>
 							<span class="val" class:neg={r.net < 0}
 								>{r.id === 'A' ? 'baseline' : signed(r.net)}</span
@@ -192,23 +141,8 @@
 						</li>
 					{/each}
 				</ol>
-				{#if caveats.length}<p class="rank-warn">
-						⚠ {caveats.map((c) => c.short).join(' · ')}
-					</p>{/if}
+				{#if note}<p class="rank-warn">⚠ {note}</p>{/if}
 			</div>
-
-			{#if m.chart}
-				<section class="block">
-					<div class="block-head"><h2 class="gok-headline-5">Over time</h2></div>
-					<gok-chart
-						style={chartColors}
-						bind:this={chartEl}
-						type="line"
-						height={280}
-						accessible-label="Net position by year for each plan"
-					></gok-chart>
-				</section>
-			{/if}
 
 			<gok-accordion class="more">
 				<gok-accordion-item heading-level="2">
@@ -222,36 +156,20 @@
 									<th scope="col"><span class="vh">Metric</span></th>
 									{#each m.scenarios as s (s.id)}
 										<th scope="col" class:win={win === s.id}>
-											<span class="meta-label sc-tag"
-												>{s.tag}{#if win === s.id}{' · best'}{/if}</span
-											>
+											<span class="meta-label sc-tag">{s.tag}</span>
 											<span class="sc-title">{s.title}</span>
 										</th>
 									{/each}
 								</tr>
 							</thead>
 							<tbody>
-								<tr
-									><th scope="row">Monthly cost, first month</th>{#each m.scenarios as s (s.id)}<td
-											class:win={win === s.id}>{formatCurrency(s.mortgageCost)}</td
-										>{/each}</tr
-								>
-								<tr
-									><th scope="row">Paid off in</th>{#each m.scenarios as s (s.id)}<td
-											class:win={win === s.id}>{s.payoff.display}</td
-										>{/each}</tr
-								>
-								<tr
-									><th scope="row">Interest paid (before ränteavdrag)</th
-									>{#each m.scenarios as s (s.id)}<td class:win={win === s.id}
-											>{formatCurrency(cmp.same[s.id].interestPaid)}</td
-										>{/each}</tr
-								>
-								<tr
-									><th scope="row">Investment value</th>{#each m.scenarios as s (s.id)}<td
-											class:win={win === s.id}>{formatCurrency(cmp.same[s.id].investment)}</td
-										>{/each}</tr
-								>
+								{#each rows as [label, cell] (label)}
+									<tr
+										><th scope="row">{label}</th>{#each m.scenarios as s (s.id)}<td
+												class:win={win === s.id}>{cell(s)}</td
+											>{/each}</tr
+									>
+								{/each}
 								<tr class="net"
 									><th scope="row">Net position</th>{#each m.scenarios as s (s.id)}<td
 											class:win={win === s.id}
@@ -263,107 +181,27 @@
 						</table>
 					</div>
 					<p class="fine">
-						Net position: investment − remaining debt − extra interest paid vs Pay it down.
+						First-month interest is {formatCurrency(m.monthlyInterest)} for every plan, with {formatCurrency(
+							m.monthlyTaxBenefit
+						)} back as ränteavdrag.
 					</p>
-				</gok-accordion-item>
-				<gok-accordion-item heading-level="2">
-					<span slot="summary">Monthly breakdown</span>
-					<div class="breakdown">
-						{#each m.scenarios as s (s.id)}
-							<div class="bd-col">
-								<h3>{s.tag} · {s.title}</h3>
-								<dl>
-									<div>
-										<dt>Interest (before ränteavdrag)</dt>
-										<dd>{formatCurrency(m.monthlyInterest)}</dd>
-									</div>
-									<div>
-										<dt>Amortization</dt>
-										<dd>{formatCurrency(s.amort)}</dd>
-									</div>
-									<div>
-										<dt>Invested</dt>
-										<dd>{formatCurrency(s.invest)}</dd>
-									</div>
-									<div class="rule">
-										<dt>Monthly cost</dt>
-										<dd>{formatCurrency(s.mortgageCost)}</dd>
-									</div>
-									<div>
-										<dt>Avgift</dt>
-										<dd>{formatCurrency(i.monthlyFee)}</dd>
-									</div>
-									<div class="rule">
-										<dt>Total with avgift</dt>
-										<dd>{formatCurrency(s.total)}</dd>
-									</div>
-									<div>
-										<dt>Tax back (ränteavdrag)</dt>
-										<dd>+{formatCurrency(m.monthlyTaxBenefit)}</dd>
-									</div>
-								</dl>
-								<gok-button
-									variant="secondary"
-									size="s"
-									accessible-label={`60-month schedule, ${s.title}`}
-									{@attach (n: HTMLElement) => on(n, 'click', () => (openSched = s.id))}
-									>60-month schedule</gok-button
-								>
-							</div>
-						{/each}
-					</div>
-				</gok-accordion-item>
-				<gok-accordion-item heading-level="2">
-					<span slot="summary">If every plan runs until paid off</span>
-					<div class="breakdown two">
-						{#each ['B', 'C'] as const as id (id)}
-							{@const card = cmp.full[id]}
-							<div class="bd-col">
-								<h3>{id} · {m.scenarios.find((s) => s.id === id)?.title}</h3>
-								{#if card}
-									<dl>
-										<div>
-											<dt>Paid off in</dt>
-											<dd>{card.payoffDisplay}</dd>
-										</div>
-										<div>
-											<dt>Interest paid (before ränteavdrag)</dt>
-											<dd>{formatCurrency(card.interestPaid)}</dd>
-										</div>
-										<div>
-											<dt>Total paid</dt>
-											<dd>{formatCurrency(card.totalPaid)}</dd>
-										</div>
-										<div>
-											<dt>Investment value</dt>
-											<dd>{formatCurrency(card.investment)}</dd>
-										</div>
-									</dl>
-								{:else}
-									<p class="muted">Never repaid at 0% amortization.</p>
-								{/if}
-							</div>
-						{/each}
-					</div>
 				</gok-accordion-item>
 				<gok-accordion-item heading-level="2">
 					<span slot="summary">How it's calculated</span>
 					<ul class="assume">
-						<li>
-							Every plan is judged on the day Pay it down clears the loan ({cmp.payoffDisplay}).
-						</li>
-						<li>
-							Amortization is a fixed share of the original loan. Interest and returns stay
-							constant. Returns are before ISK tax.
-						</li>
-						<li>
-							Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
-							The avgift is left out of totals.
-						</li>
+						<li>Every plan is judged on the day Pay it down clears the loan.</li>
 						<li>
 							Net position: investment value, minus remaining debt, minus the extra interest (after
 							ränteavdrag) a plan pays compared with Pay it down.
 						</li>
+						<li>
+							Amortization is a fixed share of the original loan. Interest and returns stay
+							constant; returns are before ISK tax.
+						</li>
+						<li>
+							Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
+						</li>
+						<li>Plans below the legal amortization minimum are left out of the ranking.</li>
 					</ul>
 				</gok-accordion-item>
 			</gok-accordion>
@@ -382,39 +220,7 @@
 	</div>
 </div>
 
-<ScheduleDialog
-	open={openSched !== ''}
-	title={openSched ? (m.scenarios.find((s) => s.id === openSched)?.title ?? '') : ''}
-	schedule={openSched ? m.schedules[openSched] : null}
-	onclose={() => (openSched = '')}
-/>
-
 <style>
-	.block {
-		margin-top: var(--gok-space-800, 48px);
-	}
-	.block-head {
-		display: flex;
-		align-items: center;
-		gap: var(--gok-space-300, 12px);
-		margin-bottom: var(--gok-space-400, 16px);
-		padding-bottom: var(--gok-space-300, 12px);
-		border-bottom: 1px solid var(--gok-color-border);
-	}
-	.block-head h2 {
-		margin: 0;
-	}
-	.eyebrow {
-		display: flex;
-		align-items: center;
-		gap: var(--gok-space-300, 12px);
-		margin: 0 0 var(--gok-space-400, 16px);
-	}
-	.eyebrow span {
-		inline-size: 24px;
-		block-size: 2px;
-		background: var(--gok-color-primary);
-	}
 	.split {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
@@ -518,11 +324,6 @@
 	.dock {
 		display: none;
 	}
-	.caveat {
-		display: block;
-		margin-top: var(--gok-space-400, 16px);
-		max-inline-size: 36rem;
-	}
 	@media (max-width: 899.98px) {
 		.dock {
 			display: flex;
@@ -572,19 +373,9 @@
 		text-wrap: balance;
 		max-width: 18ch;
 	}
-	.lead {
-		margin: var(--gok-space-400, 16px) 0 0;
-		font-size: var(--gok-type-headline-5-size, 1.125rem);
-		font-variant-numeric: tabular-nums;
-		color: var(--gok-color-primary);
-		font-weight: var(--gok-font-weight-medium, 500);
-	}
-	.lead span {
-		color: var(--gok-color-text-muted);
-		font-weight: 400;
-		font-size: var(--gok-type-body-regular-size, 16px);
-	}
+	/* gok-accordion-item sizes slotted content to itself, so the table claims the full width. */
 	.table-scroll {
+		inline-size: 100%;
 		overflow-x: auto;
 	}
 	.compare {
@@ -661,58 +452,6 @@
 	.more {
 		margin-top: var(--gok-space-700, 40px);
 	}
-	/* `inline-size` is explicit because `gok-accordion-item` sizes slotted content
-	   to itself (DS 0.9.0); without it this grid shrinks to its columns'
-	   max-content and bunches at the panel's inline start. */
-	.breakdown {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: var(--gok-space-600, 32px);
-		inline-size: 100%;
-	}
-	.breakdown.two {
-		grid-template-columns: repeat(2, 1fr);
-	}
-	@container (max-width: 640px) {
-		.breakdown,
-		.breakdown.two {
-			grid-template-columns: 1fr;
-		}
-	}
-	.bd-col {
-		display: flex;
-		flex-direction: column;
-	}
-	.bd-col gok-button {
-		margin-top: auto;
-		align-self: flex-start;
-	}
-	.bd-col h3 {
-		margin: 0 0 var(--gok-space-300, 12px);
-		font-size: var(--gok-type-body-regular-size, 16px);
-	}
-	.bd-col dl {
-		margin: 0 0 var(--gok-space-400, 16px);
-	}
-	.bd-col dl > div {
-		display: flex;
-		justify-content: space-between;
-		gap: var(--gok-space-300, 12px);
-		padding-block: var(--gok-space-100, 4px);
-		font-size: var(--gok-type-body-small-size, 14px);
-	}
-	.bd-col dl > div.rule {
-		border-block: 1px solid var(--gok-color-border);
-		margin-block: var(--gok-space-100, 4px);
-		font-weight: var(--gok-font-weight-medium, 500);
-	}
-	.bd-col dt {
-		color: var(--gok-color-text-muted);
-	}
-	.bd-col dd {
-		margin: 0;
-		font-variant-numeric: tabular-nums;
-	}
 	.assume {
 		margin: 0;
 		padding-left: var(--gok-space-500, 24px);
@@ -720,9 +459,6 @@
 		flex-direction: column;
 		gap: var(--gok-space-200, 8px);
 		font-size: var(--gok-type-body-small-size, 14px);
-		color: var(--gok-color-text-muted);
-	}
-	.muted {
 		color: var(--gok-color-text-muted);
 	}
 	.disclaimer {

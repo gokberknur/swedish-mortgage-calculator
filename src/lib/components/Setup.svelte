@@ -121,15 +121,6 @@
 							onchange={restore('annualSalary')}
 						></gok-number-input>
 					{/if}
-					<gok-number-input
-						label="Monthly fee / avgift (SEK)"
-						value={i.monthlyFee}
-						min="0"
-						locale="sv-SE"
-						step="100"
-						oninput={set('monthlyFee')}
-						onchange={restore('monthlyFee')}
-					></gok-number-input>
 				</div>
 			</div>
 		</gok-accordion-item>
@@ -248,11 +239,6 @@
 			</li>
 		{/if}
 	</ul>
-	<gok-button
-		slot="footer"
-		variant="secondary"
-		{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = false))}>Close</gok-button
-	>
 </gok-dialog>
 
 <style>
