@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { on } from 'svelte/events';
 	import { formatCurrency } from '$lib/mortgage';
 	import type { ScenarioSchedule } from '$lib/mortgage';
 
@@ -18,17 +19,6 @@
 	$effect(() => {
 		if (el) el.open = open;
 	});
-
-	function onCloseEvent(node: HTMLElement, handler: () => void) {
-		const fn = () => handler();
-		node.addEventListener('gok-close', fn);
-		return { destroy: () => node.removeEventListener('gok-close', fn) };
-	}
-	function onClick(node: HTMLElement, handler: () => void) {
-		const fn = () => handler();
-		node.addEventListener('click', fn);
-		return { destroy: () => node.removeEventListener('click', fn) };
-	}
 </script>
 
 <gok-dialog
@@ -37,7 +27,7 @@
 	scale="Payment schedule · 60 months"
 	size="l"
 	style="--gok-dialog-max-inline-size: 52rem"
-	use:onCloseEvent={onclose}
+	{@attach (n: HTMLElement) => on(n, 'gok-close', onclose)}
 >
 	{#if schedule}
 		<!-- The schedule scrolls, so its box must take focus for keyboard scrolling outside Chrome. -->
@@ -47,11 +37,11 @@
 				<thead>
 					<tr>
 						<th>Month</th>
-						<th>Monthly outlay</th>
+						<th>Monthly cost</th>
 						<th>Interest (before ränteavdrag)</th>
 						<th>Amortization</th>
-						<th>Investment</th>
-						<th>Investment balance</th>
+						<th>Invested</th>
+						<th>Investment value</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -80,7 +70,11 @@
 			</table>
 		</div>
 	{/if}
-	<gok-button slot="footer" variant="secondary" use:onClick={onclose}>Close</gok-button>
+	<gok-button
+		slot="footer"
+		variant="secondary"
+		{@attach (n: HTMLElement) => on(n, 'click', onclose)}>Close</gok-button
+	>
 </gok-dialog>
 
 <style>

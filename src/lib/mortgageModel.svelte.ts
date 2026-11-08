@@ -41,24 +41,17 @@ export interface ScenarioRow {
 	payoff: PayoffTime;
 }
 
-export interface CardSame {
-	amortPaid: number;
+export interface PlanResult {
 	interestPaid: number;
-	remainingDebt: number;
 	investment: number;
-	financialPosition: number;
-	payments: number;
-	rate: number;
+	net: number;
 }
 
-export interface CardFull {
-	amortPaid: number;
+export interface PlanPayoff {
 	interestPaid: number;
-	totalPaid: number;
 	investment: number;
+	totalPaid: number;
 	payoffDisplay: string;
-	payments: number;
-	rate: number;
 }
 
 const META: Record<ScenarioId, { title: string; tag: string; desc: string }> = {
@@ -75,7 +68,7 @@ const META: Record<ScenarioId, { title: string; tag: string; desc: string }> = {
 	C: {
 		title: 'Hybrid',
 		tag: 'C',
-		desc: 'Your own rate, plus a fixed monthly investment.'
+		desc: 'Your own rate, plus a fixed monthly sum.'
 	}
 };
 
@@ -159,122 +152,66 @@ export function createMortgageModel() {
 	]);
 
 	const comparison = $derived.by(() => {
-		const scenarioA = calculateScenario(loanAmount, inputs.interestRate, inputs.aRate);
-		const payoffMonths = scenarioA.payoffTime.totalMonths;
-		if (!isFinite(payoffMonths)) return null;
+		const a = calculateScenario(loanAmount, inputs.interestRate, inputs.aRate);
+		const months = a.payoffTime.totalMonths;
+		if (!isFinite(months)) return null;
 
-		const scenarioB = calculateScenario(loanAmount, inputs.interestRate, inputs.bRate);
-		const scenarioC = calculateScenario(loanAmount, inputs.interestRate, inputs.cRate);
-		const investmentB = calculateInvestmentGrowth(
-			scenarioA.monthlyAmortization - scenarioB.monthlyAmortization,
-			inputs.investmentReturn,
-			payoffMonths
-		);
-		const investmentC = calculateInvestmentGrowth(
-			inputs.cInvestmentAmount,
-			inputs.investmentReturn,
-			payoffMonths
-		);
-
-		const interestPaidA = calculateTotalInterestPaid(
-			loanAmount,
-			scenarioA.monthlyAmortization,
-			inputs.interestRate,
-			payoffMonths
-		);
-		const aCard = {
-			amortPaid: loanAmount,
-			interestPaid: interestPaidA,
-			totalPaid: loanAmount + interestPaidA,
-			payoffDisplay: scenarioA.payoffTime.display,
-			payments: payoffMonths,
-			rate: inputs.aRate
+		const plans: Record<ScenarioId, { rate: number; monthly: number }> = {
+			A: { rate: inputs.aRate, monthly: 0 },
+			B: { rate: inputs.bRate, monthly: investB },
+			C: { rate: inputs.cRate, monthly: inputs.cInvestmentAmount }
 		};
-
-		const sameAt = (
-			s: typeof scenarioB,
-			investment: number,
-			rate: number,
-			monthly: number
-		): CardSame => {
-			const remainingDebt = Math.max(0, loanAmount - s.monthlyAmortization * payoffMonths);
-			const interestPaid = calculateTotalInterestPaid(
+		const at = (id: ScenarioId, n: number) => ({
+			interestPaid: calculateTotalInterestPaid(
 				loanAmount,
-				s.monthlyAmortization,
+				calculateMonthlyAmortization(loanAmount, plans[id].rate),
 				inputs.interestRate,
-				payoffMonths
-			);
-			return {
-				amortPaid: s.monthlyAmortization * payoffMonths,
-				interestPaid,
-				remainingDebt,
-				investment,
-				financialPosition: netPosition({
-					loanAmount,
-					interestRate: inputs.interestRate,
-					amortizationRate: rate,
-					baselineRate: inputs.aRate,
-					monthlyInvestment: monthly,
-					investmentReturn: inputs.investmentReturn,
-					month: payoffMonths,
-					borrowers: inputs.borrowers
-				}),
-				payments: payoffMonths,
-				rate
-			};
-		};
-		const bSame = sameAt(
-			scenarioB,
-			investmentB,
-			inputs.bRate,
-			scenarioA.monthlyAmortization - scenarioB.monthlyAmortization
-		);
-		const cSame = sameAt(scenarioC, investmentC, inputs.cRate, inputs.cInvestmentAmount);
-
-		const fullAt = (
-			s: typeof scenarioB,
-			monthlyContribution: number,
-			rate: number
-		): CardFull | null => {
-			const months = s.payoffTime.totalMonths;
-			if (!isFinite(months)) return null;
-			const interestPaid = calculateTotalInterestPaid(
+				n
+			),
+			investment: calculateInvestmentGrowth(plans[id].monthly, inputs.investmentReturn, n)
+		});
+		const net = (id: ScenarioId, n: number) =>
+			netPosition({
 				loanAmount,
-				s.monthlyAmortization,
-				inputs.interestRate,
-				months
-			);
-			return {
-				amortPaid: loanAmount,
-				interestPaid,
-				totalPaid: loanAmount + interestPaid,
-				investment: calculateInvestmentGrowth(monthlyContribution, inputs.investmentReturn, months),
-				payoffDisplay: s.payoffTime.display,
-				payments: months,
-				rate
-			};
-		};
-		const bFull = fullAt(
-			scenarioB,
-			scenarioA.monthlyAmortization - scenarioB.monthlyAmortization,
-			inputs.bRate
-		);
-		const cFull = fullAt(scenarioC, inputs.cInvestmentAmount, inputs.cRate);
+				interestRate: inputs.interestRate,
+				amortizationRate: plans[id].rate,
+				baselineRate: inputs.aRate,
+				monthlyInvestment: plans[id].monthly,
+				investmentReturn: inputs.investmentReturn,
+				month: n,
+				borrowers: inputs.borrowers
+			});
 
-		return { aCard, bSame, cSame, bFull, cFull };
+		// Every plan judged on the day plan A clears the loan; plan A scores 0 by definition.
+		const same = {} as Record<ScenarioId, PlanResult>;
+		for (const id of ['A', 'B', 'C'] as const)
+			same[id] = { ...at(id, months), net: net(id, months) };
+
+		// Each plan run to its own payoff; null when it never pays off.
+		const full = (id: 'B' | 'C'): PlanPayoff | null => {
+			const payoff = scenarios.find((s) => s.id === id)!.payoff;
+			if (!isFinite(payoff.totalMonths)) return null;
+			const r = at(id, payoff.totalMonths);
+			return { ...r, totalPaid: loanAmount + r.interestPaid, payoffDisplay: payoff.display };
+		};
+
+		return {
+			months,
+			payoffDisplay: a.payoffTime.display,
+			same,
+			full: { B: full('B'), C: full('C') }
+		};
 	});
 
 	const verdict = $derived.by(() => {
 		if (!comparison) return null;
-		const entries = [
-			{ id: 'A' as const, title: META.A.title, fp: 0 },
-			{ id: 'B' as const, title: META.B.title, fp: comparison.bSame.financialPosition },
-			{ id: 'C' as const, title: META.C.title, fp: comparison.cSame.financialPosition }
-		].sort((x, y) => y.fp - x.fp);
+		const ranked = (['A', 'B', 'C'] as const)
+			.map((id) => ({ id, title: META[id].title, fp: comparison.same[id].net }))
+			.sort((x, y) => y.fp - x.fp);
 		return {
-			best: entries[0],
-			lead: entries[0].fp - entries[1].fp,
-			payoff: comparison.aCard.payoffDisplay
+			best: ranked[0],
+			lead: ranked[0].fp - ranked[1].fp,
+			payoff: comparison.payoffDisplay
 		};
 	});
 
@@ -298,7 +235,7 @@ export function createMortgageModel() {
 
 	const chart = $derived.by(() => {
 		if (!comparison) return null;
-		const horizon = Math.min(comparison.aCard.payments, 600);
+		const horizon = Math.min(comparison.months, 600);
 		if (horizon < 2) return null;
 
 		const plans = [
@@ -348,9 +285,6 @@ export function createMortgageModel() {
 		},
 		get downShare() {
 			return downShare;
-		},
-		get minDownPayment() {
-			return minDownPayment;
 		},
 		get downPaymentError() {
 			return downPaymentError;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { on } from 'svelte/events';
 	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Setup from '$lib/components/Setup.svelte';
 	import ScheduleDialog from '$lib/components/ScheduleDialog.svelte';
@@ -25,31 +26,9 @@
 		}
 	});
 
-	function onClick(node: HTMLElement, handler: () => void) {
-		const fn = () => handler();
-		node.addEventListener('click', fn);
-		return { destroy: () => node.removeEventListener('click', fn) };
-	}
-
 	const i = $derived(m.inputs);
 	const cmp = $derived(m.comparison);
 	const win = $derived(m.verdict?.best.id);
-	const fullCards = $derived(
-		cmp
-			? [
-					{ id: 'B' as const, card: cmp.bFull },
-					{ id: 'C' as const, card: cmp.cFull }
-				]
-			: []
-	);
-	const investAt = (id: ScenarioId) =>
-		id === 'A' ? 0 : id === 'B' ? (cmp?.bSame.investment ?? 0) : (cmp?.cSame.investment ?? 0);
-	const interestAt = (id: ScenarioId) =>
-		id === 'A'
-			? (cmp?.aCard.interestPaid ?? 0)
-			: id === 'B'
-				? (cmp?.bSame.interestPaid ?? 0)
-				: (cmp?.cSame.interestPaid ?? 0);
 	// Results in view: the phone dock hides, so it never covers the answer it points to.
 	let resultsInView = $state(false);
 	function watchResults(node: HTMLElement) {
@@ -80,14 +59,8 @@
 			};
 		};
 
-	const netAt = (id: ScenarioId) =>
-		id === 'A'
-			? 0
-			: id === 'B'
-				? (cmp?.bSame.financialPosition ?? 0)
-				: (cmp?.cSame.financialPosition ?? 0);
 	const ranked = $derived(
-		m.scenarios.map((s) => ({ ...s, net: netAt(s.id) })).sort((a, b) => b.net - a.net)
+		m.scenarios.map((s) => ({ ...s, net: cmp?.same[s.id].net ?? 0 })).sort((a, b) => b.net - a.net)
 	);
 	const rankMax = $derived(Math.max(1, ...ranked.map((r) => r.net)));
 	// The verdict must not quietly recommend a plan a bank would refuse, or one that only wins by
@@ -99,13 +72,13 @@
 		const out: { long: string; short: string }[] = [];
 		if (best.rate < m.requirements.totalMinimum)
 			out.push({
-				long: `A bank would not allow ${best.title}: ${best.rate}% is below the ${m.requirements.totalMinimum.toFixed(1)}% minimum.`,
+				long: `A bank won't allow ${best.title}: ${best.rate}% is below the ${m.requirements.totalMinimum.toFixed(1)}% minimum.`,
 				short: 'Below the legal minimum'
 			});
 		const extra = best.mortgageCost - a.mortgageCost;
 		if (extra >= 1)
 			out.push({
-				long: `It also costs ${formatCurrency(extra)} more a month than Pay it down.`,
+				long: `${best.title} costs ${formatCurrency(extra)} more a month than Pay it down.`,
 				short: `Costs ${formatCurrency(extra)} more a month`
 			});
 		return out;
@@ -146,7 +119,7 @@
 		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
 			<span>
 				<b
-					>{#if m.verdict.lead < 1}The plans finish level{:else}{m.verdict.best.title} ahead{/if}</b
+					>{#if m.verdict.lead < 1}The plans come out even{:else}{m.verdict.best.title} ahead{/if}</b
 				>
 				{#if m.verdict.lead >= 1}<span class="dock-lead"
 						>+{formatCurrency(m.verdict.lead)} vs {ranked[1].title}</span
@@ -163,16 +136,16 @@
 		{#if cmp && m.verdict}
 			{#if m.downPaymentError}
 				<gok-alert status="warning" class="notice"
-					>Banks require at least {m.downShare * 100}% down. These results assume a loan you can't
-					get.</gok-alert
+					>Banks need at least {m.downShare * 100}% down, so no bank would lend this.</gok-alert
 				>
 			{/if}
 			<section class="verdict">
 				<span class="meta-label">After {m.verdict.payoff}</span>
 				<h2 class="statement">
 					<span role="status">
-						{#if m.verdict.lead < 1}The strategies finish level.{:else}{m.verdict.best.title} comes out
-							ahead.<span class="vh">{` By ${formatCurrency(m.verdict.lead)}.`}</span>{/if}
+						{#if m.verdict.lead < 1}The plans come out even.{:else}{m.verdict.best.title} comes out ahead.<span
+								class="vh">{` By ${formatCurrency(m.verdict.lead)}.`}</span
+							>{/if}
 					</span>
 				</h2>
 				{#if m.verdict.lead >= 1}
@@ -243,33 +216,31 @@
 							</thead>
 							<tbody>
 								<tr
-									><th scope="row">Monthly outlay, first month</th
-									>{#each m.scenarios as s (s.id)}<td class:win={win === s.id}
-											>{formatCurrency(s.mortgageCost)}</td
+									><th scope="row">Monthly cost, first month</th>{#each m.scenarios as s (s.id)}<td
+											class:win={win === s.id}>{formatCurrency(s.mortgageCost)}</td
 										>{/each}</tr
 								>
 								<tr
-									><th scope="row">Mortgage paid off</th>{#each m.scenarios as s (s.id)}<td
+									><th scope="row">Paid off in</th>{#each m.scenarios as s (s.id)}<td
 											class:win={win === s.id}>{s.payoff.display}</td
 										>{/each}</tr
 								>
 								<tr
 									><th scope="row">Interest paid (before ränteavdrag)</th
 									>{#each m.scenarios as s (s.id)}<td class:win={win === s.id}
-											>{formatCurrency(interestAt(s.id))}</td
+											>{formatCurrency(cmp.same[s.id].interestPaid)}</td
 										>{/each}</tr
 								>
 								<tr
 									><th scope="row">Investment value</th>{#each m.scenarios as s (s.id)}<td
-											class:win={win === s.id}>{formatCurrency(investAt(s.id))}</td
+											class:win={win === s.id}>{formatCurrency(cmp.same[s.id].investment)}</td
 										>{/each}</tr
 								>
 								<tr class="net"
 									><th scope="row">Net position</th>{#each m.scenarios as s (s.id)}<td
 											class:win={win === s.id}
-											class:pos={netAt(s.id) > 0}
-											class:neg={netAt(s.id) < 0}
-											>{netAt(s.id) > 0 ? '+' : ''}{formatCurrency(netAt(s.id))}</td
+											class:pos={cmp.same[s.id].net > 0}
+											class:neg={cmp.same[s.id].net < 0}>{signed(cmp.same[s.id].net)}</td
 										>{/each}</tr
 								>
 							</tbody>
@@ -299,19 +270,19 @@
 										<dd>{formatCurrency(s.invest)}</dd>
 									</div>
 									<div class="rule">
-										<dt>Monthly outlay</dt>
+										<dt>Monthly cost</dt>
 										<dd>{formatCurrency(s.mortgageCost)}</dd>
 									</div>
 									<div>
-										<dt>+ Avgift</dt>
+										<dt>Avgift</dt>
 										<dd>{formatCurrency(i.monthlyFee)}</dd>
 									</div>
 									<div class="rule">
-										<dt>Total per month</dt>
+										<dt>Total with avgift</dt>
 										<dd>{formatCurrency(s.total)}</dd>
 									</div>
 									<div>
-										<dt>Back as ränteavdrag</dt>
+										<dt>Tax back (ränteavdrag)</dt>
 										<dd>+{formatCurrency(m.monthlyTaxBenefit)}</dd>
 									</div>
 								</dl>
@@ -319,22 +290,24 @@
 									variant="secondary"
 									size="s"
 									accessible-label={`60-month schedule, ${s.title}`}
-									use:onClick={() => (openSched = s.id)}>60-month schedule</gok-button
+									{@attach (n: HTMLElement) => on(n, 'click', () => (openSched = s.id))}
+									>60-month schedule</gok-button
 								>
 							</div>
 						{/each}
 					</div>
 				</gok-accordion-item>
 				<gok-accordion-item heading-level="2">
-					<span slot="summary">If each plan runs to its own payoff</span>
+					<span slot="summary">If every plan runs until paid off</span>
 					<div class="breakdown two">
-						{#each fullCards as { id, card } (id)}
+						{#each ['B', 'C'] as const as id (id)}
+							{@const card = cmp.full[id]}
 							<div class="bd-col">
-								<h3>{id} · at full payoff</h3>
+								<h3>{id} · {m.scenarios.find((s) => s.id === id)?.title}</h3>
 								{#if card}
 									<dl>
 										<div>
-											<dt>Payoff</dt>
+											<dt>Paid off in</dt>
 											<dd>{card.payoffDisplay}</dd>
 										</div>
 										<div>
@@ -361,34 +334,31 @@
 					<span slot="summary">How it's calculated</span>
 					<ul class="assume">
 						<li>
-							Every plan is judged on the day Pay it down clears the loan ({cmp.aCard
-								.payoffDisplay}).
+							Every plan is judged on the day Pay it down clears the loan ({cmp.payoffDisplay}).
 						</li>
 						<li>
-							Straight-line amortization on the original loan; interest &amp; returns held constant.
+							Amortization is a fixed share of the original loan. Interest and returns stay
+							constant.
 						</li>
 						<li>
-							Ränteavdrag is 30% on the first 100 000 kr of yearly interest per borrower and 21%
-							above, with the loan split equally between borrowers. The monthly fee is excluded from
-							cumulative totals.
+							Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
+							The avgift is left out of totals.
 						</li>
 						<li>
-							Net position = investment value − remaining debt − the extra interest, after
-							ränteavdrag, paid compared with Pay it down. A plan that amortizes less pays more
-							interest, and that cash counts against it.
+							Net position: investment value, minus remaining debt, minus the extra interest (after
+							ränteavdrag) a plan pays compared with Pay it down.
 						</li>
-						<li>Plans B and C may amortize below the legal minimum; banks would not allow that.</li>
 					</ul>
 				</gok-accordion-item>
 			</gok-accordion>
 		{:else if m.loanAmount <= 0}
 			<gok-alert status="info" class="notice"
-				>Enter a property value larger than the down payment to see the comparison.</gok-alert
+				>Enter a property value above the down payment.</gok-alert
 			>
 		{:else}
 			<gok-alert status="info" class="notice"
-				>Pay it down is set to 0% amortization, so its loan is never repaid and there is no payoff
-				date to compare at. Set its amortization above 0%.</gok-alert
+				>Set Pay it down's amortization above 0%. At 0% the loan is never repaid, so there is no
+				date to compare the plans at.</gok-alert
 			>
 		{/if}
 
@@ -453,17 +423,6 @@
 		gap: var(--gok-space-100, 4px) var(--gok-space-300, 12px);
 		align-items: center;
 	}
-	.rank .tag {
-		display: inline-grid;
-		place-items: center;
-		inline-size: 1.5rem;
-		block-size: 1.5rem;
-		border: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
-		border-radius: var(--gok-radius-s);
-		font-family: var(--gok-font-family-mono);
-		font-size: 0.75rem;
-		font-weight: var(--gok-font-weight-semibold, 600);
-	}
 	/* Wide screens: the ranking pins to the top of the results, so the answer stays in view
 	   whichever input you are editing. */
 	.rank-wrap {
@@ -502,7 +461,7 @@
 		block-size: 100%;
 		background: var(--gok-color-border-strong, var(--gok-color-text-muted));
 	}
-	.rank .win .tag {
+	.rank .win :global(.tag) {
 		border-color: var(--gok-color-primary);
 		color: var(--gok-color-primary);
 	}
@@ -614,13 +573,6 @@
 	}
 	.sc-title {
 		font-weight: var(--gok-font-weight-medium, 500);
-	}
-	.vh {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
 	}
 	@container (max-width: 600px) {
 		.compare th,

@@ -174,3 +174,13 @@ away:
 - The input column no longer scrolls inside itself; the pinned ranking keeps the answer in view.
 
 Page height at default inputs: 3112px → 1547px at 1280×800, 4752px → 2583px at 390×844.
+
+## Copy and code pass
+
+- Copy: one term per concept ("plans", "monthly cost", "investment value"), plain phrasing in
+  errors and empty states, no nested parentheses in the rules dialog, and "How it's calculated" no
+  longer repeats warnings the page already shows.
+- Code: removed two unused maths helpers, unused result fields and a getter; the comparison is one
+  record keyed by plan (plan A scores 0 from the same formula, so its special cases are gone); five
+  hand-written listener actions became `on()` from `svelte/events`; the shared `.tag` and `.vh`
+  styles live once in `app.css`. About 150 lines shorter, same figures (checked in Chrome).

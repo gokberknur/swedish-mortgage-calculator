@@ -60,17 +60,6 @@ export function calculateMonthlyAmortization(loanAmount: number, amortizationRat
 	return (loanAmount * (amortizationRate / 100)) / 12;
 }
 
-export function calculateTotalMonthly(
-	loanAmount: number,
-	interestRate: number,
-	amortizationRate: number
-): number {
-	return (
-		calculateMonthlyInterest(loanAmount, interestRate) +
-		calculateMonthlyAmortization(loanAmount, amortizationRate)
-	);
-}
-
 export interface PayoffTime {
 	years: number;
 	months: number;
@@ -289,37 +278,6 @@ export function simulateLoanPayments(
 	}
 
 	return { results, payoffMonth };
-}
-
-export interface InvestmentMonth {
-	month: number;
-	investmentBalance: number;
-	monthlyContribution: number;
-}
-
-export function simulateInvestmentGrowthMonthly(
-	monthlyContribution: number,
-	annualReturnRate: number,
-	months: number
-): InvestmentMonth[] {
-	const results: InvestmentMonth[] = [];
-	let investmentBalance = 0;
-	const monthlyReturnRate = annualReturnRate / 100 / 12;
-
-	for (let month = 0; month <= months; month++) {
-		results.push({
-			month,
-			investmentBalance,
-			monthlyContribution: month === 0 ? 0 : monthlyContribution
-		});
-
-		if (month < months) {
-			investmentBalance += monthlyContribution;
-			investmentBalance *= 1 + monthlyReturnRate;
-		}
-	}
-
-	return results;
 }
 
 export interface ScheduleRow {

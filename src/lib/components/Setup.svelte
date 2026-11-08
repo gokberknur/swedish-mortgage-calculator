@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { on } from 'svelte/events';
 	import { formatCurrency, RULES_DATE, RULES_SOURCE } from '$lib/mortgage';
 	import type { MortgageModel } from '$lib/mortgageModel.svelte';
 
@@ -29,16 +30,6 @@
 		if ((e as NumberEvent).detail?.value == null)
 			(e.target as HTMLElement & { value: number }).value = model.inputs[key];
 	};
-	function onClick(node: HTMLElement, handler: () => void) {
-		const fn = () => handler();
-		node.addEventListener('click', fn);
-		return { destroy: () => node.removeEventListener('click', fn) };
-	}
-	function onClose(node: HTMLElement, handler: () => void) {
-		const fn = () => handler();
-		node.addEventListener('gok-close', fn);
-		return { destroy: () => node.removeEventListener('gok-close', fn) };
-	}
 
 	type Field = HTMLElement & { checked?: boolean; value?: string };
 
@@ -90,7 +81,10 @@
 		<b
 			>{#if model.loanAmount > 0}{model.requirements.totalMinimum.toFixed(1)}%/yr{:else}–{/if}</b
 		>
-		<gok-button variant="tertiary" size="s" use:onClick={() => (openRules = true)}>Rules</gok-button
+		<gok-button
+			variant="tertiary"
+			size="s"
+			{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = true))}>Rules</gok-button
 		>
 	</p>
 	<gok-accordion class="more">
@@ -170,7 +164,7 @@
 						step="0.1"
 						error={model.meetsRequirement
 							? ''
-							: `At least ${model.requirements.totalMinimum.toFixed(1)}% is required`}
+							: `Minimum is ${model.requirements.totalMinimum.toFixed(1)}%`}
 						oninput={set('aRate')}
 						onchange={restore('aRate')}
 					></gok-number-input>
@@ -183,7 +177,7 @@
 						step="0.1"
 						helper={i.bRate >= i.aRate
 							? ''
-							: belowMin(i.bRate) || `Invests ${formatCurrency(s.invest)}/month`}
+							: belowMin(i.bRate) || `Invests ${formatCurrency(s.invest)} a month`}
 						error={i.bRate >= i.aRate ? `Must be below Pay it down's ${i.aRate}%` : ''}
 						oninput={set('bRate')}
 						onchange={restore('bRate')}
@@ -200,7 +194,7 @@
 						onchange={restore('cRate')}
 					></gok-number-input>
 					<gok-number-input
-						label="Invest / month (SEK)"
+						label="Monthly investment (SEK)"
 						locale="sv-SE"
 						value={i.cInvestmentAmount}
 						min="0"
@@ -219,20 +213,21 @@
 	bind:this={rulesEl}
 	heading="Swedish amortization rules"
 	scale="amorteringskrav"
-	use:onClose={() => (openRules = false)}
+	{@attach (n: HTMLElement) => on(n, 'gok-close', () => (openRules = false))}
 >
 	<p class="muted">
 		{#if i.legacy}
 			Rules for loans taken before {RULES_DATE}.
 		{:else}
-			Rules in force since {RULES_DATE} (<a
-				href={RULES_SOURCE}
-				target="_blank"
-				rel="noopener noreferrer">Regeringen (opens in a new tab)</a
-			>).
+			Rules since {RULES_DATE}.
+			<a href={RULES_SOURCE} target="_blank" rel="noopener noreferrer"
+				>Source: Regeringen<span class="vh">{' (opens in a new tab)'}</span> ↗</a
+			>
 		{/if}
-		Your situation: LTV {model.ltv.toFixed(1)}%{#if i.legacy}, LTI {model.lti.toFixed(2)}×{/if}
-		→ minimum {model.requirements.totalMinimum.toFixed(1)}%/yr.
+		<br />Your LTV is {model.ltv.toFixed(1)}%{#if i.legacy}
+			and your LTI {model.lti.toFixed(2)}×{/if}, so the minimum is {model.requirements.totalMinimum.toFixed(
+			1
+		)}% a year.
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
@@ -255,8 +250,10 @@
 			</li>
 		{/if}
 	</ul>
-	<gok-button slot="footer" variant="secondary" use:onClick={() => (openRules = false)}
-		>Close</gok-button
+	<gok-button
+		slot="footer"
+		variant="secondary"
+		{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = false))}>Close</gok-button
 	>
 </gok-dialog>
 
@@ -320,18 +317,6 @@
 		margin: 0;
 		font-size: var(--gok-type-body-regular-size, 16px);
 		font-weight: var(--gok-font-weight-medium, 500);
-	}
-	.tag {
-		display: inline-grid;
-		place-items: center;
-		inline-size: 1.5rem;
-		block-size: 1.5rem;
-		flex: none;
-		border: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
-		border-radius: var(--gok-radius-s);
-		font-family: var(--gok-font-family-mono);
-		font-size: 0.75rem;
-		font-weight: var(--gok-font-weight-semibold, 600);
 	}
 	.muted {
 		color: var(--gok-color-text-muted);
