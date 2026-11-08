@@ -162,7 +162,7 @@
 						>{/if}
 					<h2 class="statement">{headline}</h2>
 					{#if win !== 'A'}<p class="lead" aria-hidden="true">
-							{signed(winNet)} better off than Pay it down
+							<span class="num">{signed(winNet)}</span> better off than Pay it down
 						</p>{/if}
 				</section>
 			{/if}
@@ -172,8 +172,8 @@
 			class="results"
 			id="results"
 			{@attach watch(
-				// Hidden once the top of the results is a ranking's height into the screen, or passed.
-				(e) => (resultsInView = e.boundingClientRect.top < innerHeight - 200),
+				// Hidden once the results rise above where the bar sits, or have been passed.
+				(e) => (resultsInView = e.boundingClientRect.top < innerHeight - 96),
 				[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 			)}
 		>
@@ -208,7 +208,24 @@
 						<span slot="summary">Compare in detail</span>
 						<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
 						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-						<div class="table-scroll" role="region" aria-label="Plan comparison" tabindex="0">
+						<div
+							class="table-scroll"
+							role="region"
+							aria-label="Plan comparison"
+							tabindex="0"
+							{@attach (n: HTMLElement) => {
+								// A fade at the right edge while columns are scrolled out of view.
+								const set = () =>
+									n.classList.toggle('more-x', n.scrollLeft + n.clientWidth < n.scrollWidth - 1);
+								const ro = new ResizeObserver(set);
+								ro.observe(n);
+								n.addEventListener('scroll', set, { passive: true });
+								return () => {
+									ro.disconnect();
+									n.removeEventListener('scroll', set);
+								};
+							}}
+						>
 							<table class="compare">
 								<thead>
 									<tr>
@@ -312,9 +329,11 @@
 	}
 	.lead {
 		margin: var(--gok-space-300, 12px) 0 0;
+		color: var(--gok-color-text-muted);
+	}
+	.lead .num {
 		font-family: var(--gok-font-family-mono);
 		font-variant-numeric: tabular-nums;
-		color: var(--gok-color-text-muted);
 	}
 	.fine {
 		margin: var(--gok-space-300, 12px) 0 0;
@@ -467,7 +486,11 @@
 	.sc-tag {
 		display: block;
 	}
+	.table-scroll:global(.more-x) {
+		mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+	}
 	.sc-title {
+		font-family: var(--gok-font-family-text);
 		font-weight: var(--gok-font-weight-medium, 500);
 	}
 	@container (max-width: 600px) {

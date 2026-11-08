@@ -48,7 +48,7 @@
 	<h2 class="gok-headline-5" id="loan-h">Your loan</h2>
 	<div class="fields">
 		<gok-number-input
-			label="Property value (SEK)"
+			label="Property value (kr)"
 			value={i.propertyValue}
 			min="0"
 			locale="sv-SE"
@@ -58,7 +58,7 @@
 			onchange={restore('propertyValue')}
 		></gok-number-input>
 		<gok-number-input
-			label="Down payment (SEK)"
+			label="Down payment (kr)"
 			value={i.downPayment}
 			min="0"
 			locale="sv-SE"
@@ -115,7 +115,7 @@
 				</gok-segmented>
 				{#if i.legacy}
 					<gok-number-input
-						label="Household income (SEK/yr)"
+						label="Household income (kr/yr)"
 						value={i.annualSalary}
 						min="0"
 						helper="All borrowers, before tax"
@@ -186,7 +186,7 @@
 						onchange={restore('cRate')}
 					></gok-number-input>
 					<gok-number-input
-						label="Monthly investment (SEK)"
+						label="Monthly investment (kr)"
 						locale="sv-SE"
 						value={i.cInvestmentAmount}
 						min="0"
