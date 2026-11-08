@@ -51,13 +51,22 @@
 	const note = $derived.by(() => {
 		if (m.loanAmount <= 0) return '';
 		const out: string[] = [];
-		const refused = m.scenarios.filter((s) => s.id !== 'A' && s.rate < m.minAmortization);
+		const min = m.minAmortization;
+		// B needs min <= B < A; when A is at or below the minimum, only raising A can unblock it.
+		const bBlocked = i.aRate <= min;
+		const refused = m.scenarios.filter(
+			(s) => s.id !== 'A' && s.rate < min && !(s.id === 'B' && bBlocked)
+		);
 		if (refused.length)
 			out.push(
-				`${refused.map((s) => s.title).join(' and ')} ${refused.length > 1 ? "aren't" : "isn't"} ranked: raise amortization to ${m.minAmortization.toFixed(1)}%.`
+				`${refused.map((s) => s.title).join(' and ')} ${refused.length > 1 ? "aren't" : "isn't"} ranked: raise amortization to ${min.toFixed(1)}%.`
 			);
-		if (i.bRate >= i.aRate)
-			out.push(`Invest the difference isn't ranked: set its amortization below ${i.aRate}%.`);
+		if (bBlocked)
+			out.push(`Invest the difference isn't ranked: raise Pay it down above ${min.toFixed(1)}%.`);
+		else if (i.bRate >= i.aRate)
+			out.push(
+				`Invest the difference isn't ranked: set its amortization below ${i.aRate.toFixed(1)}%.`
+			);
 		return out.join(' ');
 	});
 	// A winner that also costs more each month says so on its row.
@@ -75,8 +84,7 @@
 		['Interest paid', (s) => formatCurrency(cmp?.same[s.id].interestPaid ?? 0)],
 		['Investment value', (s) => formatCurrency(cmp?.same[s.id].investment ?? 0)]
 	];
-	// Inputs no bank would accept leave the answer empty; the field errors say what to fix.
-	const invalid = $derived(!!m.downPaymentError || m.loanAmount <= 0 || !m.meetsRequirement);
+	const invalid = $derived(m.invalid);
 	const headline = $derived(
 		ranked.length === 1
 			? 'Only Pay it down qualifies.'
@@ -177,9 +185,8 @@
 				[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 			)}
 		>
-			{#if invalid}
-				<!-- The field error says what to fix; there is no answer for a loan no bank would grant. -->
-			{:else if cmp && best}
+			<!-- With invalid inputs the field errors say what to fix and there is no answer. -->
+			{#if cmp && best && !invalid}
 				<div class="rank-wrap">
 					{#if ranked.length > 1}<p class="meta-label rank-cap" id="rank-cap">
 							Better off than Pay it down, before ISK tax
@@ -202,79 +209,77 @@
 						</ol>{/if}
 					{#if note}<p class="rank-warn">⚠ {note}</p>{/if}
 				</div>
-
-				<gok-accordion class="more">
-					<gok-accordion-item heading-level="2">
-						<span slot="summary">Compare in detail</span>
-						<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
-						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-						<div
-							class="table-scroll"
-							role="region"
-							aria-label="Plan comparison"
-							tabindex="0"
-							{@attach (n: HTMLElement) => {
-								// A fade at the right edge while columns are scrolled out of view.
-								const set = () =>
-									n.classList.toggle('more-x', n.scrollLeft + n.clientWidth < n.scrollWidth - 1);
-								const ro = new ResizeObserver(set);
-								ro.observe(n);
-								n.addEventListener('scroll', set, { passive: true });
-								return () => {
-									ro.disconnect();
-									n.removeEventListener('scroll', set);
-								};
-							}}
-						>
-							<table class="compare">
-								<thead>
-									<tr>
-										<th scope="col"><span class="vh">Metric</span></th>
-										{#each ranked as s (s.id)}
-											<th scope="col" class:win={win === s.id}>
-												<span class="meta-label sc-tag">{s.tag}</span>
-												<span class="sc-title">{s.title}</span>
-											</th>
-										{/each}
-									</tr>
-								</thead>
-								<tbody>
-									{#each rows as [label, cell] (label)}
-										<tr
-											><th scope="row">{label}</th>{#each ranked as s (s.id)}<td
-													class:win={win === s.id}>{cell(s)}</td
-												>{/each}</tr
-										>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-						<p class="fine">Costs and interest before ränteavdrag; investments before ISK tax.</p>
-					</gok-accordion-item>
-					<gok-accordion-item heading-level="2">
-						<span slot="summary">How it's calculated</span>
-						<ul class="assume">
-							<li>
-								Net position: investment value, minus remaining debt, minus the extra interest
-								(after ränteavdrag) a plan pays compared with Pay it down.
-							</li>
-							<li>
-								Amortization is a fixed share of the original loan. Interest and returns stay
-								constant.
-							</li>
-							<li>
-								Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
-							</li>
-						</ul>
-					</gok-accordion-item>
-				</gok-accordion>
-				<p class="disclaimer">For information only, not financial advice.</p>
-			{:else}
-				<gok-alert status="info" class="notice"
-					>Set Pay it down's amortization above 0%. At 0% the loan is never repaid, so there is no
-					date to compare the plans at.</gok-alert
-				>
 			{/if}
+
+			<!-- Mounted even while inputs are invalid, so an open section stays open through a typo. -->
+			<gok-accordion class="more" hidden={invalid || !cmp}>
+				<gok-accordion-item heading-level="2">
+					<span slot="summary">Compare in detail</span>
+					<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<div
+						class="table-scroll"
+						role="region"
+						aria-label="Plan comparison"
+						tabindex="0"
+						{@attach (n: HTMLElement) => {
+							// A fade at the right edge while columns are scrolled out of view.
+							const set = () =>
+								n.classList.toggle('more-x', n.scrollLeft + n.clientWidth < n.scrollWidth - 1);
+							const ro = new ResizeObserver(set);
+							ro.observe(n);
+							n.addEventListener('scroll', set, { passive: true });
+							return () => {
+								ro.disconnect();
+								n.removeEventListener('scroll', set);
+							};
+						}}
+					>
+						<table class="compare">
+							<thead>
+								<tr>
+									<th scope="col"><span class="vh">Metric</span></th>
+									{#each ranked as s (s.id)}
+										<th scope="col" class:win={win === s.id}>
+											<span class="meta-label sc-tag">{s.tag}</span>
+											<span class="sc-title">{s.title}</span>
+										</th>
+									{/each}
+								</tr>
+							</thead>
+							<tbody>
+								{#each rows as [label, cell] (label)}
+									<tr
+										><th scope="row">{label}</th>{#each ranked as s (s.id)}<td
+												class:win={win === s.id}>{cell(s)}</td
+											>{/each}</tr
+									>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+					<p class="fine">Costs and interest before ränteavdrag; investments before ISK tax.</p>
+				</gok-accordion-item>
+				<gok-accordion-item heading-level="2">
+					<span slot="summary">How it's calculated</span>
+					<ul class="assume">
+						<li>
+							Net position: investment value, minus remaining debt, minus the extra interest (after
+							ränteavdrag) a plan pays compared with Pay it down.
+						</li>
+						<li>
+							Amortization is a fixed share of the original loan. Interest and returns stay
+							constant.
+						</li>
+						<li>
+							Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
+						</li>
+					</ul>
+				</gok-accordion-item>
+			</gok-accordion>
+			{#if cmp && !invalid}<p class="disclaimer">
+					For information only, not financial advice.
+				</p>{/if}
 		</div>
 	</div>
 </div>
@@ -515,10 +520,6 @@
 	}
 	.neg {
 		color: var(--gok-color-status-error-text);
-	}
-	.notice {
-		display: block;
-		margin-top: var(--gok-space-800, 48px);
 	}
 	.more {
 		margin-top: var(--gok-space-700, 40px);

@@ -94,6 +94,14 @@ export function createMortgageModel() {
 					: ''
 	);
 	const meetsRequirement = $derived(inputs.aRate >= minAmortization);
+	// Inputs no bank would accept leave the answer empty; each field's own error says what to fix.
+	const invalid = $derived(
+		!!propertyError ||
+			!!downPaymentError ||
+			loanAmount <= 0 ||
+			!meetsRequirement ||
+			inputs.aRate <= 0
+	);
 
 	const monthlyInterest = $derived(calculateMonthlyInterest(loanAmount, inputs.interestRate));
 	const monthlyTaxBenefit = $derived(calculateMonthlyTaxBenefit(monthlyInterest, inputs.borrowers));
@@ -223,6 +231,9 @@ export function createMortgageModel() {
 		},
 		get propertyError() {
 			return propertyError;
+		},
+		get invalid() {
+			return invalid;
 		},
 		get meetsRequirement() {
 			return meetsRequirement;

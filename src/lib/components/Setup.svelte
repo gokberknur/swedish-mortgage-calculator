@@ -79,13 +79,12 @@
 		></gok-number-input>
 	</div>
 	<p class="summary">
-		Loan <b>{model.loanAmount > 0 ? formatCurrency(model.loanAmount) : '–'}</b> · Loan-to-value
-		<b>{model.loanAmount > 0 ? `${model.ltv.toFixed(1)}%` : '–'}</b><br />
+		Loan <b>{model.loanAmount > 0 ? formatCurrency(model.loanAmount) : '–'}</b><br />
 		Min amortization
 		<b
 			>{#if model.loanAmount > 0}{model.minAmortization.toFixed(1)}%/yr{:else}–{/if}</b
 		>
-		{#if model.loanAmount > 0}<gok-button
+		{#if model.loanAmount > 0 && model.minAmortization > 0}<gok-button
 				variant="tertiary"
 				size="s"
 				{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = true))}
@@ -156,9 +155,11 @@
 						min="0"
 						max="10"
 						step="0.1"
-						error={model.meetsRequirement
-							? ''
-							: `Enter at least ${model.minAmortization.toFixed(1)}%`}
+						error={i.aRate <= 0
+							? 'Enter more than 0%'
+							: model.meetsRequirement
+								? ''
+								: `Enter at least ${model.minAmortization.toFixed(1)}%`}
 						oninput={set('aRate')}
 						onchange={restore('aRate')}
 					></gok-number-input>
@@ -169,7 +170,7 @@
 						min="0"
 						max="10"
 						step="0.1"
-						helper={i.bRate < i.aRate && i.bRate >= model.minAmortization
+						helper={!model.invalid && i.bRate < i.aRate && i.bRate >= model.minAmortization
 							? `Invests ${formatCurrency(s.invest)} a month`
 							: ''}
 						oninput={set('bRate')}
