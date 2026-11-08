@@ -157,3 +157,20 @@ Three rounds ran, the cap in this spec. No HIGH finding after round 1. Round 3's
 in Chrome (1280, 900, 390 and 320px, light and dark, focus on every input) but not re-reviewed, so
 the page has no Approve verdict yet. One more review before merging is worth it: round 2 and round 3
 each found a MEDIUM introduced by the previous round's fix.
+
+## Simplification pass (after round 3)
+
+Owner feedback: still too much at once. Cut to what answers the question, and put the rest one tap
+away:
+
+- Intro is one question: "Pay off your mortgage faster, or invest instead?"
+- Inputs: three loan fields up front. The pre-April switch, borrowers, household income and monthly
+  fee sit in a closed "More options". Loan, LTV and the minimum are one muted line with a "Rules"
+  button. Plan descriptions are a few words; helper text appears only when something needs
+  attention (B still says what it invests).
+- Results: "After 33 years 4 months", the verdict, "+90 716 kr more than Hybrid", the ranking and
+  the chart. The comparison table, the net-position definition and the method moved into the
+  accordion ("Compare in detail", "How it's calculated").
+- The input column no longer scrolls inside itself; the pinned ranking keeps the answer in view.
+
+Page height at default inputs: 3112px → 1547px at 1280×800, 4752px → 2583px at 390×844.

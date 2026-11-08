@@ -46,66 +46,34 @@
 	// Plans B and C may go below the legal minimum to explore; say so instead of blocking it.
 	const belowMin = (rate: number) =>
 		model.loanAmount > 0 && rate < model.requirements.totalMinimum
-			? `Below the ${model.requirements.totalMinimum.toFixed(1)}% legal minimum; a bank would not allow it`
+			? `Below the ${model.requirements.totalMinimum.toFixed(1)}% legal minimum`
 			: '';
 </script>
 
 <section class="block" aria-labelledby="loan-h">
 	<h2 class="gok-headline-5" id="loan-h">Your loan</h2>
-	<div class="situation">
-		<gok-switch
-			{@attach (n: Field) => {
-				n.checked = i.legacy;
-			}}
-			onchange={(e: Event) => (model.inputs.legacy = !!(e.target as Field).checked)}
-			helper="Keeps the old 85% cap and the extra 1% for loans over 4.5× income"
-			>Loan taken before {RULES_DATE}</gok-switch
-		>
-		<gok-segmented
-			label="Borrowers"
-			{@attach (n: Field) => {
-				n.value = String(i.borrowers);
-			}}
-			onchange={(e: Event) => (model.inputs.borrowers = Number((e.target as Field).value))}
-		>
-			<gok-segmented-item value="1">One borrower</gok-segmented-item>
-			<gok-segmented-item value="2">Two borrowers</gok-segmented-item>
-		</gok-segmented>
-	</div>
 	<div class="fields">
 		<gok-number-input
 			label="Property value (SEK)"
-			error={model.propertyError}
-			locale="sv-SE"
 			value={i.propertyValue}
 			min="0"
+			locale="sv-SE"
 			step="100000"
+			error={model.propertyError}
 			oninput={set('propertyValue')}
 			onchange={restore('propertyValue')}
 		></gok-number-input>
 		<gok-number-input
 			label="Down payment (SEK)"
-			locale="sv-SE"
 			value={i.downPayment}
 			min="0"
+			locale="sv-SE"
 			step="50000"
-			helper={`Min ${model.downShare * 100}% of property value`}
+			helper={`Min ${model.downShare * 100}%`}
 			error={model.downPaymentError}
 			oninput={set('downPayment')}
 			onchange={restore('downPayment')}
 		></gok-number-input>
-		{#if i.legacy}
-			<gok-number-input
-				label="Household gross income (SEK/yr)"
-				helper="All borrowers combined, before tax. Sets the extra 1% rule above 4.5× income"
-				locale="sv-SE"
-				value={i.annualSalary}
-				min="0"
-				step="10000"
-				oninput={set('annualSalary')}
-				onchange={restore('annualSalary')}
-			></gok-number-input>
-		{/if}
 		<gok-number-input
 			label="Interest rate (%)"
 			value={i.interestRate}
@@ -115,37 +83,69 @@
 			oninput={set('interestRate')}
 			onchange={restore('interestRate')}
 		></gok-number-input>
-		<gok-number-input
-			label="Monthly fee / avgift (SEK)"
-			locale="sv-SE"
-			value={i.monthlyFee}
-			min="0"
-			step="100"
-			oninput={set('monthlyFee')}
-			onchange={restore('monthlyFee')}
-		></gok-number-input>
 	</div>
 	<p class="summary">
-		<span class="meta-label">Loan</span>
-		<span class="v">{formatCurrency(model.loanAmount)}</span>
-		<span class="meta-label">LTV</span>
-		<span class="v">{model.ltv.toFixed(1)}%</span>
-		<span class="meta-label">Min amortization</span>
-		<span class="v"
-			>{#if model.loanAmount > 0}{model.requirements.totalMinimum.toFixed(1)}%/yr{:else}–{/if}</span
+		Loan <b>{formatCurrency(model.loanAmount)}</b> · LTV <b>{model.ltv.toFixed(1)}%</b><br />
+		Min amortization
+		<b
+			>{#if model.loanAmount > 0}{model.requirements.totalMinimum.toFixed(1)}%/yr{:else}–{/if}</b
+		>
+		<gok-button variant="tertiary" size="s" use:onClick={() => (openRules = true)}>Rules</gok-button
 		>
 	</p>
-	<gok-button variant="secondary" size="s" use:onClick={() => (openRules = true)}
-		>See amortization rules</gok-button
-	>
+	<gok-accordion class="more">
+		<gok-accordion-item heading-level="3">
+			<span slot="summary">More options</span>
+			<div class="options">
+				<gok-switch
+					{@attach (n: Field) => {
+						n.checked = i.legacy;
+					}}
+					onchange={(e: Event) => (model.inputs.legacy = !!(e.target as Field).checked)}
+					>Loan taken before {RULES_DATE}</gok-switch
+				>
+				<gok-segmented
+					label="Borrowers"
+					{@attach (n: Field) => {
+						n.value = String(i.borrowers);
+					}}
+					onchange={(e: Event) => (model.inputs.borrowers = Number((e.target as Field).value))}
+				>
+					<gok-segmented-item value="1">One borrower</gok-segmented-item>
+					<gok-segmented-item value="2">Two borrowers</gok-segmented-item>
+				</gok-segmented>
+				<div class="fields">
+					{#if i.legacy}
+						<gok-number-input
+							label="Household income (SEK/yr)"
+							value={i.annualSalary}
+							min="0"
+							helper="All borrowers, before tax"
+							locale="sv-SE"
+							step="10000"
+							oninput={set('annualSalary')}
+							onchange={restore('annualSalary')}
+						></gok-number-input>
+					{/if}
+					<gok-number-input
+						label="Monthly fee / avgift (SEK)"
+						value={i.monthlyFee}
+						min="0"
+						locale="sv-SE"
+						step="100"
+						oninput={set('monthlyFee')}
+						onchange={restore('monthlyFee')}
+					></gok-number-input>
+				</div>
+			</div>
+		</gok-accordion-item>
+	</gok-accordion>
 </section>
 
 <section class="block" aria-labelledby="plans-h">
 	<h2 class="gok-headline-5" id="plans-h">Your plans</h2>
-	<p class="intro">Three ways to handle the same loan.</p>
 	<gok-number-input
-		label="Expected annual return (%)"
-		helper="Yearly growth on what plans B and C invest"
+		label="Investment return (%/yr)"
 		value={i.investmentReturn}
 		min="0"
 		max="20"
@@ -158,8 +158,8 @@
 			<div class="plan-head">
 				<span class="tag" aria-hidden="true">{s.tag}</span>
 				<h3 id="plan-{s.id}">{s.title}</h3>
+				<span class="desc">{s.desc}</span>
 			</div>
-			<p class="desc">{s.desc}</p>
 			<div class="fields">
 				{#if s.id === 'A'}
 					<gok-number-input
@@ -170,10 +170,7 @@
 						step="0.1"
 						error={model.meetsRequirement
 							? ''
-							: `Enter at least ${model.requirements.totalMinimum.toFixed(1)}% to meet amorteringskrav`}
-						helper={model.loanAmount > 0 && model.meetsRequirement
-							? 'Meets Swedish requirement'
-							: ''}
+							: `At least ${model.requirements.totalMinimum.toFixed(1)}% is required`}
 						oninput={set('aRate')}
 						onchange={restore('aRate')}
 					></gok-number-input>
@@ -186,11 +183,8 @@
 						step="0.1"
 						helper={i.bRate >= i.aRate
 							? ''
-							: belowMin(i.bRate) ||
-								`Invests ${formatCurrency(s.invest)} a month: what Pay it down amortizes on top`}
-						error={i.bRate >= i.aRate
-							? `Enter a rate below Pay it down's ${i.aRate}% to have a difference to invest`
-							: ''}
+							: belowMin(i.bRate) || `Invests ${formatCurrency(s.invest)}/month`}
+						error={i.bRate >= i.aRate ? `Must be below Pay it down's ${i.aRate}%` : ''}
 						oninput={set('bRate')}
 						onchange={restore('bRate')}
 					></gok-number-input>
@@ -198,15 +192,15 @@
 					<gok-number-input
 						label="Amortization (%)"
 						value={i.cRate}
-						helper={belowMin(i.cRate)}
 						min="0"
 						max="10"
 						step="0.1"
+						helper={belowMin(i.cRate)}
 						oninput={set('cRate')}
 						onchange={restore('cRate')}
 					></gok-number-input>
 					<gok-number-input
-						label="Invest each month (SEK)"
+						label="Invest / month (SEK)"
 						locale="sv-SE"
 						value={i.cInvestmentAmount}
 						min="0"
@@ -273,27 +267,26 @@
 		gap: var(--gok-space-400, 16px);
 	}
 	.block + .block {
-		margin-top: var(--gok-space-700, 40px);
-	}
-	.block > gok-button {
-		align-self: flex-start;
+		margin-top: var(--gok-space-800, 48px);
 	}
 	h2 {
 		margin: 0;
-		padding-bottom: var(--gok-space-200, 8px);
-		border-bottom: 1px solid var(--gok-color-border);
 	}
-	.intro,
 	.desc {
-		margin: 0;
+		flex-basis: 100%;
+		padding-inline-start: calc(1.5rem + var(--gok-space-300, 12px));
 		color: var(--gok-color-text-muted);
 		font-size: var(--gok-type-body-small-size, 14px);
 	}
-	.situation {
+	.options {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: var(--gok-space-300, 12px);
+		gap: var(--gok-space-400, 16px);
+		inline-size: 100%;
+	}
+	.options .fields {
+		inline-size: 100%;
 	}
 	.fields {
 		display: grid;
@@ -302,29 +295,26 @@
 	}
 	.summary {
 		margin: 0;
-		display: grid;
-		grid-template-columns: auto 1fr;
-		gap: var(--gok-space-100, 4px) var(--gok-space-400, 16px);
-		align-items: baseline;
-		padding-top: var(--gok-space-300, 12px);
-		border-top: 1px solid var(--gok-color-border);
-	}
-	.summary .v {
+		line-height: 2;
+		font-size: var(--gok-type-body-small-size, 14px);
+		color: var(--gok-color-text-muted);
 		font-variant-numeric: tabular-nums;
+	}
+	.summary b {
+		color: var(--gok-color-text);
 		font-weight: var(--gok-font-weight-medium, 500);
-		text-align: end;
 	}
 	.plan {
 		display: flex;
 		flex-direction: column;
-		gap: var(--gok-space-200, 8px);
-		padding-top: var(--gok-space-400, 16px);
-		border-top: 1px solid var(--gok-color-border);
+		gap: var(--gok-space-300, 12px);
+		margin-top: var(--gok-space-300, 12px);
 	}
 	.plan-head {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--gok-space-300, 12px);
+		gap: 0 var(--gok-space-300, 12px);
 	}
 	.plan h3 {
 		margin: 0;

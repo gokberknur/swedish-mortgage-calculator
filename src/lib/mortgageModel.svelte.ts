@@ -65,17 +65,17 @@ const META: Record<ScenarioId, { title: string; tag: string; desc: string }> = {
 	A: {
 		title: 'Pay it down',
 		tag: 'A',
-		desc: 'Amortize fast, no investing. The baseline everything else is measured against.'
+		desc: 'Amortize fast, invest nothing.'
 	},
 	B: {
 		title: 'Invest the difference',
 		tag: 'B',
-		desc: 'Amortize less and invest the monthly difference vs. Pay it down.'
+		desc: 'Amortize less, invest the rest.'
 	},
 	C: {
 		title: 'Hybrid',
 		tag: 'C',
-		desc: 'Amortize at your own rate and invest a fixed amount each month.'
+		desc: 'Your own rate, plus a fixed monthly investment.'
 	}
 };
 

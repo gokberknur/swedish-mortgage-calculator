@@ -99,13 +99,13 @@
 		const out: { long: string; short: string }[] = [];
 		if (best.rate < m.requirements.totalMinimum)
 			out.push({
-				long: `${best.title} amortizes ${best.rate}%, below the ${m.requirements.totalMinimum.toFixed(1)}% legal minimum, so a bank would not allow it.`,
+				long: `A bank would not allow ${best.title}: ${best.rate}% is below the ${m.requirements.totalMinimum.toFixed(1)}% minimum.`,
 				short: 'Below the legal minimum'
 			});
 		const extra = best.mortgageCost - a.mortgageCost;
 		if (extra >= 1)
 			out.push({
-				long: `It costs ${formatCurrency(extra)} more a month than Pay it down, which explains part of its lead.`,
+				long: `It also costs ${formatCurrency(extra)} more a month than Pay it down.`,
 				short: `Costs ${formatCurrency(extra)} more a month`
 			});
 		return out;
@@ -135,10 +135,7 @@
 <div class="page-head">
 	<Eyebrow text="Tool · Sweden" />
 	<h1 class="gok-headline-1">Swedish Mortgage Calculator</h1>
-	<p>
-		One loan, three strategies. Set up your loan and the three plans below, and see which leaves you
-		better off, under Swedish rules (amorteringskrav, ränteavdrag, kontantinsats).
-	</p>
+	<p>Pay off your mortgage faster, or invest instead?</p>
 </div>
 
 <div class="split">
@@ -152,7 +149,7 @@
 					>{#if m.verdict.lead < 1}The plans finish level{:else}{m.verdict.best.title} ahead{/if}</b
 				>
 				{#if m.verdict.lead >= 1}<span class="dock-lead"
-						>+{formatCurrency(m.verdict.lead)} vs the next plan</span
+						>+{formatCurrency(m.verdict.lead)} vs {ranked[1].title}</span
 					>{/if}
 				{#if caveats.length}<span class="dock-warn"
 						>⚠ {caveats.map((c) => c.short).join(' · ')}</span
@@ -171,9 +168,7 @@
 				>
 			{/if}
 			<section class="verdict">
-				<span class="meta-label"
-					>Verdict · after {m.verdict.payoff}, when Pay it down is paid off</span
-				>
+				<span class="meta-label">After {m.verdict.payoff}</span>
 				<h2 class="statement">
 					<span role="status">
 						{#if m.verdict.lead < 1}The strategies finish level.{:else}{m.verdict.best.title} comes out
@@ -183,7 +178,7 @@
 				{#if m.verdict.lead >= 1}
 					<p class="lead">
 						+{formatCurrency(m.verdict.lead)}
-						<span>better net position than the next-best plan</span>
+						<span>more than {ranked[1].title}</span>
 					</p>
 				{/if}
 				{#if caveats.length}
@@ -213,71 +208,9 @@
 					</p>{/if}
 			</div>
 
-			<section class="block">
-				<div class="block-head"><h2 class="gok-headline-4">How they compare</h2></div>
-				<p class="block-intro">
-					Frozen at the moment <strong>Pay it down</strong> clears the loan ({cmp.aCard
-						.payoffDisplay}), so every plan is judged at the same point in time.
-				</p>
-				<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
-				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-				<div class="table-scroll" role="region" aria-label="Plan comparison" tabindex="0">
-					<table class="compare">
-						<thead>
-							<tr>
-								<th scope="col"><span class="vh">Metric</span></th>
-								{#each m.scenarios as s (s.id)}
-									<th scope="col" class:win={win === s.id}>
-										<span class="meta-label sc-tag"
-											>{s.tag}{#if win === s.id}{' · best'}{/if}</span
-										>
-										<span class="sc-title">{s.title}</span>
-									</th>
-								{/each}
-							</tr>
-						</thead>
-						<tbody>
-							<tr
-								><th scope="row">Monthly outlay, first month</th>{#each m.scenarios as s (s.id)}<td
-										class:win={win === s.id}>{formatCurrency(s.mortgageCost)}</td
-									>{/each}</tr
-							>
-							<tr
-								><th scope="row">Mortgage paid off</th>{#each m.scenarios as s (s.id)}<td
-										class:win={win === s.id}>{s.payoff.display}</td
-									>{/each}</tr
-							>
-							<tr
-								><th scope="row">Interest paid (before ränteavdrag)</th
-								>{#each m.scenarios as s (s.id)}<td class:win={win === s.id}
-										>{formatCurrency(interestAt(s.id))}</td
-									>{/each}</tr
-							>
-							<tr
-								><th scope="row">Investment value</th>{#each m.scenarios as s (s.id)}<td
-										class:win={win === s.id}>{formatCurrency(investAt(s.id))}</td
-									>{/each}</tr
-							>
-							<tr class="net"
-								><th scope="row">Net position</th>{#each m.scenarios as s (s.id)}<td
-										class:win={win === s.id}
-										class:pos={netAt(s.id) > 0}
-										class:neg={netAt(s.id) < 0}
-										>{netAt(s.id) > 0 ? '+' : ''}{formatCurrency(netAt(s.id))}</td
-									>{/each}</tr
-							>
-						</tbody>
-					</table>
-				</div>
-				<p class="fine">
-					Net position = investment value − any remaining debt − the extra interest (after
-					ränteavdrag) the plan paid compared with Pay it down. Before tax on investment gains.
-				</p>
-			</section>
-
 			{#if m.chart}
 				<section class="block">
-					<div class="block-head"><h2 class="gok-headline-4">Net position over time</h2></div>
+					<div class="block-head"><h2 class="gok-headline-5">Over time</h2></div>
 					<gok-chart
 						style={chartColors}
 						bind:this={chartEl}
@@ -289,6 +222,63 @@
 			{/if}
 
 			<gok-accordion class="more">
+				<gok-accordion-item heading-level="2">
+					<span slot="summary">Compare in detail</span>
+					<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+					<div class="table-scroll" role="region" aria-label="Plan comparison" tabindex="0">
+						<table class="compare">
+							<thead>
+								<tr>
+									<th scope="col"><span class="vh">Metric</span></th>
+									{#each m.scenarios as s (s.id)}
+										<th scope="col" class:win={win === s.id}>
+											<span class="meta-label sc-tag"
+												>{s.tag}{#if win === s.id}{' · best'}{/if}</span
+											>
+											<span class="sc-title">{s.title}</span>
+										</th>
+									{/each}
+								</tr>
+							</thead>
+							<tbody>
+								<tr
+									><th scope="row">Monthly outlay, first month</th
+									>{#each m.scenarios as s (s.id)}<td class:win={win === s.id}
+											>{formatCurrency(s.mortgageCost)}</td
+										>{/each}</tr
+								>
+								<tr
+									><th scope="row">Mortgage paid off</th>{#each m.scenarios as s (s.id)}<td
+											class:win={win === s.id}>{s.payoff.display}</td
+										>{/each}</tr
+								>
+								<tr
+									><th scope="row">Interest paid (before ränteavdrag)</th
+									>{#each m.scenarios as s (s.id)}<td class:win={win === s.id}
+											>{formatCurrency(interestAt(s.id))}</td
+										>{/each}</tr
+								>
+								<tr
+									><th scope="row">Investment value</th>{#each m.scenarios as s (s.id)}<td
+											class:win={win === s.id}>{formatCurrency(investAt(s.id))}</td
+										>{/each}</tr
+								>
+								<tr class="net"
+									><th scope="row">Net position</th>{#each m.scenarios as s (s.id)}<td
+											class:win={win === s.id}
+											class:pos={netAt(s.id) > 0}
+											class:neg={netAt(s.id) < 0}
+											>{netAt(s.id) > 0 ? '+' : ''}{formatCurrency(netAt(s.id))}</td
+										>{/each}</tr
+								>
+							</tbody>
+						</table>
+					</div>
+					<p class="fine">
+						Net position: investment − remaining debt − extra interest paid vs Pay it down.
+					</p>
+				</gok-accordion-item>
 				<gok-accordion-item heading-level="2">
 					<span slot="summary">Monthly breakdown</span>
 					<div class="breakdown">
@@ -368,8 +358,12 @@
 					</div>
 				</gok-accordion-item>
 				<gok-accordion-item heading-level="2">
-					<span slot="summary">Assumptions &amp; method</span>
+					<span slot="summary">How it's calculated</span>
 					<ul class="assume">
+						<li>
+							Every plan is judged on the day Pay it down clears the loan ({cmp.aCard
+								.payoffDisplay}).
+						</li>
 						<li>
 							Straight-line amortization on the original loan; interest &amp; returns held constant.
 						</li>
@@ -424,11 +418,6 @@
 	.block-head h2 {
 		margin: 0;
 	}
-	.block-intro {
-		margin: 0 0 var(--gok-space-500, 24px);
-		color: var(--gok-color-text-muted);
-		max-width: 60ch;
-	}
 	.split {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
@@ -442,15 +431,6 @@
 		.split {
 			grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
 			gap: var(--gok-space-900, 64px);
-			align-items: start;
-		}
-		/* The inputs stay on screen while the results scroll, so every edit shows its effect. */
-		.inputs {
-			position: sticky;
-			top: var(--gok-space-400, 16px);
-			max-block-size: calc(100dvh - 2 * var(--gok-space-400, 16px));
-			overflow-y: auto;
-			padding-inline-end: var(--gok-space-300, 12px);
 		}
 	}
 	.results > :first-child {
