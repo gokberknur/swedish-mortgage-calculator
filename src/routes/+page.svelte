@@ -71,7 +71,7 @@
 	<h1 class="gok-headline-1">Swedish Mortgage Calculator</h1>
 	<p>
 		One loan, three strategies. Set up your loan and the three plans below, and see which leaves you
-		better off, under Swedish rules (amorteringskrav, ränteavdrag, the 15% kontantinsats).
+		better off, under Swedish rules (amorteringskrav, ränteavdrag, kontantinsats).
 	</p>
 </div>
 
@@ -80,7 +80,7 @@
 {#if cmp && m.verdict}
 	{#if m.downPaymentError}
 		<gok-alert status="warning" class="notice"
-			>Banks require at least 15% down. These results assume a loan you can't get.</gok-alert
+			>Banks require at least {m.downShare * 100}% down. These results assume a loan you can't get.</gok-alert
 		>
 	{/if}
 	<section class="verdict">
@@ -154,7 +154,8 @@
 			</table>
 		</div>
 		<p class="fine">
-			Net position = investment value − any remaining debt, before tax on investment gains.
+			Net position = investment value − any remaining debt − the extra interest (after ränteavdrag)
+			the plan paid compared with Pay it down. Before tax on investment gains.
 		</p>
 	</section>
 
@@ -203,7 +204,7 @@
 								<dd>{formatCurrency(s.total)}</dd>
 							</div>
 							<div>
-								<dt>Back as ränteavdrag (30%)</dt>
+								<dt>Back as ränteavdrag</dt>
 								<dd>+{formatCurrency(m.monthlyTaxBenefit)}</dd>
 							</div>
 						</dl>
@@ -255,8 +256,17 @@
 				<li>
 					Straight-line amortization on the original loan; interest &amp; returns held constant.
 				</li>
-				<li>Ränteavdrag is a flat 30%; the monthly fee is excluded from cumulative totals.</li>
-				<li>Net position = investment value − remaining debt. Figures before tax unless noted.</li>
+				<li>
+					Ränteavdrag is 30% on the first 100 000 kr of yearly interest per borrower and 21% above,
+					with the loan split equally between borrowers. The monthly fee is excluded from cumulative
+					totals.
+				</li>
+				<li>
+					Net position = investment value − remaining debt − the extra interest, after ränteavdrag,
+					paid compared with Pay it down. A plan that amortizes less pays more interest, and that
+					cash counts against it.
+				</li>
+				<li>Plans B and C may amortize below the legal minimum; banks would not allow that.</li>
 			</ul>
 		</gok-accordion-item>
 	</gok-accordion>

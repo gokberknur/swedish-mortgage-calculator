@@ -6,10 +6,30 @@
  *   1. Amortization is straight-line on the ORIGINAL loan (fixed kr/month).
  *   2. Headline monthly interest uses the full original balance (does not decline);
  *      only the simulation helpers use a declining balance.
- *   3. Ränteavdrag (interest tax deduction) is a flat 30%: no 21% tier, no cap.
- *   4. Monthly fee (avgift) is excluded from all cumulative/total/net-position math.
- *   5. "Financial position" = investment − remaining debt (tax not subtracted).
+ *   3. Monthly fee (avgift) is excluded from all cumulative/total/net-position math.
+ *
+ * Rules are the ones in force since 1 April 2026 (90% bolånetak, no income-based extra
+ * amortization), with a `legacy` flag for loans taken before that date.
  */
+
+/** The date the current Swedish mortgage rules took effect. */
+export const RULES_DATE = '1 April 2026';
+export const RULES_SOURCE =
+	'https://www.regeringen.se/pressmeddelanden/2026/03/nya-lagandringar-ska-ge-fler-mojlighet-att-aga-sin-bostad/';
+
+/** Minimum kontantinsats as a share of the property value: 10% since 1 April 2026, 15% before. */
+export function minDownShare(legacy = false): number {
+	return legacy ? 0.15 : 0.1;
+}
+
+/** Ränteavdrag threshold: 30% on the first 100 000 kr of yearly interest per borrower, 21% above. */
+export const RANTEAVDRAG_THRESHOLD = 100_000;
+
+/** Yearly tax reduction for `annualInterest` kr of interest, shared equally by `borrowers`. */
+export function annualTaxReduction(annualInterest: number, borrowers = 1): number {
+	const cap = RANTEAVDRAG_THRESHOLD * borrowers;
+	return 0.3 * Math.min(annualInterest, cap) + 0.21 * Math.max(0, annualInterest - cap);
+}
 
 const currencyFormatter = new Intl.NumberFormat('sv-SE', {
 	style: 'currency',
@@ -26,9 +46,13 @@ export function calculateMonthlyInterest(loanAmount: number, interestRate: numbe
 	return (loanAmount * (interestRate / 100)) / 12;
 }
 
-/** Ränteavdrag: flat 30% of the monthly interest. */
-export function calculateMonthlyTaxBenefit(monthlyInterest: number): number {
-	return monthlyInterest * 0.3;
+/**
+ * Ränteavdrag for one month, applying the yearly tiers to this month's interest run at a year's pace.
+ * ponytail: exact when interest is flat within a year; on a declining balance it differs from
+ * Skatteverket's yearly sum by a few kronor a year. Sum per calendar year if that ever matters.
+ */
+export function calculateMonthlyTaxBenefit(monthlyInterest: number, borrowers = 1): number {
+	return annualTaxReduction(monthlyInterest * 12, borrowers) / 12;
 }
 
 /** Straight-line amortization: a fixed share of the ORIGINAL loan per month. */
@@ -105,9 +129,13 @@ export interface AmortRequirement {
 /**
  * Amorteringskrav: Sweden's mandatory amortization minimum.
  *   LTV > 70%  → 2%/yr,  50–70% → 1%/yr,  < 50% → 0%.
- *   LTI > 4.5× → +1%/yr.
+ *   Loans taken before 1 April 2026 (`legacy`) also keep: LTI > 4.5× → +1%/yr.
  */
-export function calculateSwedishAmortization(ltv: number, lti: number): AmortRequirement {
+export function calculateSwedishAmortization(
+	ltv: number,
+	lti: number,
+	legacy = false
+): AmortRequirement {
 	let ltvRequirement = 0;
 	let ltiRequirement = 0;
 
@@ -117,7 +145,7 @@ export function calculateSwedishAmortization(ltv: number, lti: number): AmortReq
 		ltvRequirement = 1;
 	}
 
-	if (lti > 4.5) {
+	if (legacy && lti > 4.5) {
 		ltiRequirement = 1;
 	}
 
@@ -140,11 +168,12 @@ export interface Scenario {
 export function calculateScenario(
 	loanAmount: number,
 	interestRate: number,
-	amortizationRate: number
+	amortizationRate: number,
+	borrowers = 1
 ): Scenario {
 	const monthlyInterest = calculateMonthlyInterest(loanAmount, interestRate);
 	const monthlyAmortization = calculateMonthlyAmortization(loanAmount, amortizationRate);
-	const monthlyTaxBenefit = calculateMonthlyTaxBenefit(monthlyInterest);
+	const monthlyTaxBenefit = calculateMonthlyTaxBenefit(monthlyInterest, borrowers);
 	const payoffTime = calculatePayoffTime(loanAmount, monthlyAmortization);
 
 	return {
@@ -216,7 +245,8 @@ export function simulateLoanPayments(
 	initialLoan: number,
 	annualInterestRate: number,
 	annualAmortizationRate: number,
-	months: number
+	months: number,
+	borrowers = 1
 ): LoanSimulation {
 	const results: LoanPaymentMonth[] = [];
 	let remainingLoan = initialLoan;
@@ -230,7 +260,7 @@ export function simulateLoanPayments(
 		const monthlyInterest = (remainingLoan * (annualInterestRate / 100)) / 12;
 		const monthlyAmortPayment =
 			remainingLoan > 0 ? Math.min(monthlyAmortization, remainingLoan) : 0;
-		const monthlyTaxBenefit = calculateMonthlyTaxBenefit(monthlyInterest);
+		const monthlyTaxBenefit = calculateMonthlyTaxBenefit(monthlyInterest, borrowers);
 
 		if (month > 0) {
 			cumulativeInterest += monthlyInterest;
@@ -369,4 +399,40 @@ export function buildScenarioSchedule(
 		finalInvestmentValue: investmentValue,
 		totalPaid
 	};
+}
+
+export interface NetPositionInput {
+	loanAmount: number;
+	interestRate: number;
+	/** This plan's amortization, %/yr of the original loan. */
+	amortizationRate: number;
+	/** Plan A's amortization: the baseline whose interest bill the plan is measured against. */
+	baselineRate: number;
+	monthlyInvestment: number;
+	investmentReturn: number;
+	month: number;
+	borrowers?: number;
+}
+
+/**
+ * A plan's net position after `month` months: investment value − remaining debt − the extra
+ * interest (after ränteavdrag) it has paid compared with the baseline plan. A plan that amortizes
+ * less keeps a bigger balance and so pays more interest; that cash would otherwise have been
+ * invested or kept, so it counts against the plan. The baseline itself always scores 0.
+ */
+export function netPosition(p: NetPositionInput): number {
+	const b = p.borrowers ?? 1;
+	const at = (rate: number) =>
+		simulateLoanPayments(p.loanAmount, p.interestRate, rate, p.month, b).results[p.month];
+	const plan = at(p.amortizationRate);
+	const base = at(p.baselineRate);
+	const extraInterest =
+		plan.cumulativeInterest -
+		plan.cumulativeTaxBenefit -
+		(base.cumulativeInterest - base.cumulativeTaxBenefit);
+	return (
+		calculateInvestmentGrowth(p.monthlyInvestment, p.investmentReturn, p.month) -
+		plan.remainingLoan -
+		extraInterest
+	);
 }
