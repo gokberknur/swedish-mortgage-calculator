@@ -15,9 +15,9 @@ See `tasks/plan.md`.
   - Acceptance: phase 2 criteria 1–7 in the standalone spec, plus the net-position fix
   - Verify: `npm test` (band edges, 10% boundary, 100 000 / 200 000 kr tiers, switch on/off, new verdict)
   - Files: `mortgage.ts`, `mortgageModel.svelte.ts`, `Setup.svelte`, `+page.svelte`, `mortgage.test.ts`
-- [ ] T4: Checkpoint, site registry row, PR
+- [x] T4: Checkpoint, site registry row, PR
   - Verify: Chrome pass; projects registry in the personal site shows repo URL and **public**
-- [ ] T5: Three layout sketches in the Design Hub, Feature development tab
+- [x] T5: Three layout sketches in the Design Hub, Feature development tab
   - Acceptance: split pane, results first, plan columns; each at 390 and 1280
 - [ ] T6: Build the chosen direction (branch)
   - Verify: layout spec success criteria 1–7
