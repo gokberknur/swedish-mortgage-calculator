@@ -72,8 +72,8 @@ const META: Record<ScenarioId, { title: string; tag: string; desc: string }> = {
 	}
 };
 
-/** Chart series names: short enough that the line-end labels never truncate on a phone. */
-const SHORT: Record<ScenarioId, string> = { A: 'A · Pay down', B: 'B · Invest', C: 'C · Hybrid' };
+/** Chart series names: the plan letters used everywhere else, so line-end labels never truncate. */
+const SHORT: Record<ScenarioId, string> = { A: 'A', B: 'B', C: 'C' };
 
 export function createMortgageModel() {
 	const inputs = $state({
@@ -203,9 +203,15 @@ export function createMortgageModel() {
 		};
 	});
 
+	// Plan B only exists when it amortizes less than A; otherwise it has nothing to invest and its
+	// field shows an error, so it sits out of the ranking instead of feeding it a rejected value.
+	const rankedIds = $derived(
+		(['A', 'B', 'C'] as const).filter((id) => id !== 'B' || inputs.bRate < inputs.aRate)
+	);
+
 	const verdict = $derived.by(() => {
 		if (!comparison) return null;
-		const ranked = (['A', 'B', 'C'] as const)
+		const ranked = rankedIds
 			.map((id) => ({ id, title: META[id].title, fp: comparison.same[id].net }))
 			.sort((x, y) => y.fp - x.fp);
 		return {
@@ -306,6 +312,9 @@ export function createMortgageModel() {
 		},
 		get comparison() {
 			return comparison;
+		},
+		get rankedIds() {
+			return rankedIds;
 		},
 		get verdict() {
 			return verdict;

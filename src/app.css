@@ -117,3 +117,11 @@ a:hover {
 	clip-path: inset(50%);
 	white-space: nowrap;
 }
+
+/* Accordion panels line up with the column edge instead of an inset box. */
+gok-accordion-item {
+	--gok-accordion-header-pad-inline: 0;
+}
+gok-accordion-item::part(panel) {
+	padding-inline: 0;
+}

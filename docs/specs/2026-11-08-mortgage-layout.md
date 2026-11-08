@@ -184,3 +184,25 @@ Page height at default inputs: 3112px → 1547px at 1280×800, 4752px → 2583px
   record keyed by plan (plan A scores 0 from the same formula, so its special cases are gone); five
   hand-written listener actions became `on()` from `svelte/events`; the shared `.tag` and `.vh`
   styles live once in `app.css`. About 150 lines shorter, same figures (checked in Chrome).
+
+### Round 4 (after simplification): Block (0 HIGH, 4 MEDIUM, 4 LOW)
+
+Fixed:
+
+- MEDIUM: an invalid plan B (rate not below A's) still fed the verdict. B now sits out of the
+  ranking and the verdict until its field is valid.
+- MEDIUM: the short warning had no subject and the illegal winner still said "best". The warning
+  names the plan, and that row says "not allowed".
+- MEDIUM: the ranking had no visible caption and "0 kr" for Pay it down read as "leaves you
+  nothing". It is captioned "Net position vs Pay it down" and A shows "baseline".
+- MEDIUM: investment returns did not say before or after tax. The field and the method say "before
+  ISK tax".
+- LOW: missing space in the rules dialog; accordion panels now line up with the column; chart lines
+  use the plan letters used everywhere else.
+
+Also, as agreed: on phones the answer now comes first (verdict, then inputs, then ranking and
+details), with the DOM in the same order so tab order matches. The bottom bar shows only while
+neither the answer nor the results are on screen.
+
+Not changed: LOW, the pinned first column of the phone comparison table is a light block over the
+gradient in light mode.

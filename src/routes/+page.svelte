@@ -29,15 +29,16 @@
 	const i = $derived(m.inputs);
 	const cmp = $derived(m.comparison);
 	const win = $derived(m.verdict?.best.id);
-	// Results in view: the phone dock hides, so it never covers the answer it points to.
+	// The phone bar hides while the answer or the results are on screen, so it never repeats them.
+	let answerInView = $state(false);
 	let resultsInView = $state(false);
-	function watchResults(node: HTMLElement) {
-		const io = new IntersectionObserver(([e]) => (resultsInView = e.isIntersecting), {
+	const watch = (set: (v: boolean) => void) => (node: HTMLElement) => {
+		const io = new IntersectionObserver(([e]) => set(e.isIntersecting), {
 			rootMargin: '0px 0px -40% 0px'
 		});
 		io.observe(node);
 		return () => io.disconnect();
-	}
+	};
 
 	// Focused fields scroll clear of the bar instead of hiding behind it, whatever its height.
 	// Pinned bars (the phone dock, the wide-screen ranking) reserve their height in the page's scroll
@@ -60,26 +61,33 @@
 		};
 
 	const ranked = $derived(
-		m.scenarios.map((s) => ({ ...s, net: cmp?.same[s.id].net ?? 0 })).sort((a, b) => b.net - a.net)
+		m.scenarios
+			.filter((s) => m.rankedIds.includes(s.id))
+			.map((s) => ({ ...s, net: cmp?.same[s.id].net ?? 0 }))
+			.sort((a, b) => b.net - a.net)
 	);
 	const rankMax = $derived(Math.max(1, ...ranked.map((r) => r.net)));
 	// The verdict must not quietly recommend a plan a bank would refuse, or one that only wins by
 	// spending more each month.
+	const notAllowed = $derived.by(() => {
+		const best = m.scenarios.find((s) => s.id === win);
+		return !!best && best.rate < m.requirements.totalMinimum;
+	});
 	const caveats = $derived.by(() => {
 		const best = m.scenarios.find((s) => s.id === win);
 		const a = m.scenarios[0];
 		if (!best || m.verdict!.lead < 1) return [];
 		const out: { long: string; short: string }[] = [];
-		if (best.rate < m.requirements.totalMinimum)
+		if (notAllowed)
 			out.push({
 				long: `A bank won't allow ${best.title}: ${best.rate}% is below the ${m.requirements.totalMinimum.toFixed(1)}% minimum.`,
-				short: 'Below the legal minimum'
+				short: `${best.title} is below the ${m.requirements.totalMinimum.toFixed(1)}% minimum`
 			});
 		const extra = best.mortgageCost - a.mortgageCost;
 		if (extra >= 1)
 			out.push({
 				long: `${best.title} costs ${formatCurrency(extra)} more a month than Pay it down.`,
-				short: `Costs ${formatCurrency(extra)} more a month`
+				short: `${best.title} costs ${formatCurrency(extra)} more a month`
 			});
 		return out;
 	});
@@ -112,27 +120,7 @@
 </div>
 
 <div class="split">
-	<aside class="inputs" aria-label="Your numbers">
-		<Setup model={m} />
-	</aside>
-	{#if m.verdict && !resultsInView}
-		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
-			<span>
-				<b
-					>{#if m.verdict.lead < 1}The plans come out even{:else}{m.verdict.best.title} ahead{/if}</b
-				>
-				{#if m.verdict.lead >= 1}<span class="dock-lead"
-						>+{formatCurrency(m.verdict.lead)} vs {ranked[1].title}</span
-					>{/if}
-				{#if caveats.length}<span class="dock-warn"
-						>⚠ {caveats.map((c) => c.short).join(' · ')}</span
-					>{/if}
-			</span>
-			<span class="dock-cta">See results</span>
-		</a>
-	{/if}
-
-	<div class="results" id="results" {@attach watchResults}>
+	<div class="answer" {@attach watch((v) => (answerInView = v))}>
 		{#if cmp && m.verdict}
 			{#if m.downPaymentError}
 				<gok-alert status="warning" class="notice"
@@ -160,16 +148,45 @@
 					>
 				{/if}
 			</section>
+		{/if}
+	</div>
+
+	<aside class="inputs" aria-label="Your numbers">
+		<Setup model={m} />
+	</aside>
+	{#if m.verdict && !resultsInView && !answerInView}
+		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
+			<span>
+				<b
+					>{#if m.verdict.lead < 1}The plans come out even{:else}{m.verdict.best.title} ahead{/if}</b
+				>
+				{#if m.verdict.lead >= 1}<span class="dock-lead"
+						>+{formatCurrency(m.verdict.lead)} vs {ranked[1].title}</span
+					>{/if}
+				{#if caveats.length}<span class="dock-warn"
+						>⚠ {caveats.map((c) => c.short).join(' · ')}</span
+					>{/if}
+			</span>
+			<span class="dock-cta">See results</span>
+		</a>
+	{/if}
+
+	<div class="results" id="results" {@attach watch((v) => (resultsInView = v))}>
+		{#if cmp && m.verdict}
 			<div class="rank-wrap" {@attach padRoot('Top', '(min-width: 900px)')}>
-				<ol class="rank" aria-label="Net position by plan">
+				<p class="meta-label rank-cap" id="rank-cap">Net position vs Pay it down</p>
+				<ol class="rank" aria-labelledby="rank-cap">
 					{#each ranked as r (r.id)}
 						<li class:win={win === r.id}>
 							<span class="tag" aria-hidden="true">{r.tag}</span>
 							<span class="name"
-								>{r.title}{#if win === r.id}<span class="meta-label">{'\u00a0·\u00a0best'}</span
+								>{r.title}{#if win === r.id}<span class="meta-label"
+										>{notAllowed ? '\u00a0·\u00a0not allowed' : '\u00a0·\u00a0best'}</span
 									>{/if}</span
 							>
-							<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
+							<span class="val" class:neg={r.net < 0}
+								>{r.id === 'A' ? 'baseline' : signed(r.net)}</span
+							>
 							<span class="bar" aria-hidden="true"
 								><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
 							>
@@ -338,7 +355,7 @@
 						</li>
 						<li>
 							Amortization is a fixed share of the original loan. Interest and returns stay
-							constant.
+							constant. Returns are before ISK tax.
 						</li>
 						<li>
 							Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
@@ -397,11 +414,27 @@
 		container-type: inline-size;
 		min-inline-size: 0;
 	}
+	/* Phones read top to bottom: answer, inputs, details. Wide screens put the inputs on the left,
+	   beside the answer and the details. */
 	@media (min-width: 900px) {
 		.split {
 			grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
-			gap: var(--gok-space-900, 64px);
+			grid-template-rows: auto 1fr;
+			grid-template-areas: 'inputs answer' 'inputs results';
+			gap: var(--gok-space-600, 32px) var(--gok-space-900, 64px);
 		}
+		.inputs {
+			grid-area: inputs;
+		}
+		.answer {
+			grid-area: answer;
+		}
+		.results {
+			grid-area: results;
+		}
+	}
+	.rank-cap {
+		margin: 0 0 var(--gok-space-300, 12px);
 	}
 	.results > :first-child {
 		margin-top: 0;
@@ -426,7 +459,7 @@
 	/* Wide screens: the ranking pins to the top of the results, so the answer stays in view
 	   whichever input you are editing. */
 	.rank-wrap {
-		margin-top: var(--gok-space-600, 32px);
+		margin-top: 0;
 	}
 	.rank-warn {
 		margin: var(--gok-space-200, 8px) 0 0;

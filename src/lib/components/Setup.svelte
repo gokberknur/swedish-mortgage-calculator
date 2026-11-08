@@ -140,6 +140,7 @@
 	<h2 class="gok-headline-5" id="plans-h">Your plans</h2>
 	<gok-number-input
 		label="Investment return (%/yr)"
+		helper="Before ISK tax"
 		value={i.investmentReturn}
 		min="0"
 		max="20"
@@ -224,10 +225,9 @@
 				>Source: Regeringen<span class="vh">{' (opens in a new tab)'}</span> ↗</a
 			>
 		{/if}
-		<br />Your LTV is {model.ltv.toFixed(1)}%{#if i.legacy}
-			and your LTI {model.lti.toFixed(2)}×{/if}, so the minimum is {model.requirements.totalMinimum.toFixed(
-			1
-		)}% a year.
+		<br />Your LTV is {model.ltv.toFixed(1)}%{#if i.legacy}{' and your LTI '}{model.lti.toFixed(
+				2
+			)}×{/if}, so the minimum is {model.requirements.totalMinimum.toFixed(1)}% a year.
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
