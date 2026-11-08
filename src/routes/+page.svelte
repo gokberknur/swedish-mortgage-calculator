@@ -50,12 +50,27 @@
 			: id === 'B'
 				? (cmp?.bSame.interestPaid ?? 0)
 				: (cmp?.cSame.interestPaid ?? 0);
+	// Results in view: the phone dock hides, so it never covers the answer it points to.
+	let resultsInView = $state(false);
+	function watchResults(node: HTMLElement) {
+		const io = new IntersectionObserver(([e]) => (resultsInView = e.isIntersecting), {
+			rootMargin: '0px 0px -40% 0px'
+		});
+		io.observe(node);
+		return () => io.disconnect();
+	}
+
 	const netAt = (id: ScenarioId) =>
 		id === 'A'
 			? 0
 			: id === 'B'
 				? (cmp?.bSame.financialPosition ?? 0)
 				: (cmp?.cSame.financialPosition ?? 0);
+	const ranked = $derived(
+		m.scenarios.map((s) => ({ ...s, net: netAt(s.id) })).sort((a, b) => b.net - a.net)
+	);
+	const rankMax = $derived(Math.max(1, ...ranked.map((r) => r.net)));
+	const signed = (n: number) => `${n > 0 ? '+' : ''}${formatCurrency(n)}`;
 </script>
 
 <svelte:head>
@@ -75,213 +90,250 @@
 	</p>
 </div>
 
-<Setup model={m} />
+<div class="split">
+	<aside class="inputs" aria-label="Your numbers">
+		<Setup model={m} />
+	</aside>
 
-{#if cmp && m.verdict}
-	{#if m.downPaymentError}
-		<gok-alert status="warning" class="notice"
-			>Banks require at least {m.downShare * 100}% down. These results assume a loan you can't get.</gok-alert
-		>
-	{/if}
-	<section class="verdict">
-		<span class="meta-label">Verdict · after {m.verdict.payoff}, when Pay it down is paid off</span>
-		<h2 class="statement">
-			<span role="status">
-				{#if m.verdict.lead < 1}The strategies finish level.{:else}{m.verdict.best.title} comes out ahead.{/if}
-			</span>
-		</h2>
-		{#if m.verdict.lead >= 1}
-			<p class="lead">
-				+{formatCurrency(m.verdict.lead)} <span>better net position than the next-best plan</span>
-			</p>
-		{/if}
-	</section>
+	<div class="results" id="results" {@attach watchResults}>
+		{#if cmp && m.verdict}
+			{#if m.downPaymentError}
+				<gok-alert status="warning" class="notice"
+					>Banks require at least {m.downShare * 100}% down. These results assume a loan you can't
+					get.</gok-alert
+				>
+			{/if}
+			<section class="verdict">
+				<span class="meta-label"
+					>Verdict · after {m.verdict.payoff}, when Pay it down is paid off</span
+				>
+				<h2 class="statement">
+					<span role="status">
+						{#if m.verdict.lead < 1}The strategies finish level.{:else}{m.verdict.best.title} comes out
+							ahead.{/if}
+					</span>
+				</h2>
+				{#if m.verdict.lead >= 1}
+					<p class="lead">
+						+{formatCurrency(m.verdict.lead)}
+						<span>better net position than the next-best plan</span>
+					</p>
+				{/if}
+				<ol class="rank" aria-label="Net position by plan">
+					{#each ranked as r (r.id)}
+						<li class:win={win === r.id}>
+							<span class="tag" aria-hidden="true">{r.tag}</span>
+							<span class="name">{r.title}</span>
+							<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
+							<span class="bar" aria-hidden="true"
+								><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
+							>
+						</li>
+					{/each}
+				</ol>
+			</section>
 
-	<section class="block">
-		<div class="block-head"><h2 class="gok-headline-4">How they compare</h2></div>
-		<p class="block-intro">
-			Frozen at the moment <strong>Pay it down</strong> clears the loan ({cmp.aCard.payoffDisplay}),
-			so every plan is judged at the same point in time.
-		</p>
-		<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
-		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-		<div class="table-scroll" role="region" aria-label="Plan comparison" tabindex="0">
-			<table class="compare">
-				<thead>
-					<tr>
-						<th scope="col"><span class="vh">Metric</span></th>
+			<section class="block">
+				<div class="block-head"><h2 class="gok-headline-4">How they compare</h2></div>
+				<p class="block-intro">
+					Frozen at the moment <strong>Pay it down</strong> clears the loan ({cmp.aCard
+						.payoffDisplay}), so every plan is judged at the same point in time.
+				</p>
+				<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<div class="table-scroll" role="region" aria-label="Plan comparison" tabindex="0">
+					<table class="compare">
+						<thead>
+							<tr>
+								<th scope="col"><span class="vh">Metric</span></th>
+								{#each m.scenarios as s (s.id)}
+									<th scope="col" class:win={win === s.id}>
+										<span class="meta-label sc-tag"
+											>{s.tag}{#if win === s.id}{' · best'}{/if}</span
+										>
+										<span class="sc-title">{s.title}</span>
+									</th>
+								{/each}
+							</tr>
+						</thead>
+						<tbody>
+							<tr
+								><th scope="row">Monthly outlay, first month</th>{#each m.scenarios as s (s.id)}<td
+										class:win={win === s.id}>{formatCurrency(s.mortgageCost)}</td
+									>{/each}</tr
+							>
+							<tr
+								><th scope="row">Mortgage paid off</th>{#each m.scenarios as s (s.id)}<td
+										class:win={win === s.id}>{s.payoff.display}</td
+									>{/each}</tr
+							>
+							<tr
+								><th scope="row">Interest paid (before ränteavdrag)</th
+								>{#each m.scenarios as s (s.id)}<td class:win={win === s.id}
+										>{formatCurrency(interestAt(s.id))}</td
+									>{/each}</tr
+							>
+							<tr
+								><th scope="row">Investment value</th>{#each m.scenarios as s (s.id)}<td
+										class:win={win === s.id}>{formatCurrency(investAt(s.id))}</td
+									>{/each}</tr
+							>
+							<tr class="net"
+								><th scope="row">Net position</th>{#each m.scenarios as s (s.id)}<td
+										class:win={win === s.id}
+										class:pos={netAt(s.id) > 0}
+										class:neg={netAt(s.id) < 0}
+										>{netAt(s.id) > 0 ? '+' : ''}{formatCurrency(netAt(s.id))}</td
+									>{/each}</tr
+							>
+						</tbody>
+					</table>
+				</div>
+				<p class="fine">
+					Net position = investment value − any remaining debt − the extra interest (after
+					ränteavdrag) the plan paid compared with Pay it down. Before tax on investment gains.
+				</p>
+			</section>
+
+			{#if m.chart}
+				<section class="block">
+					<div class="block-head"><h2 class="gok-headline-4">Net position over time</h2></div>
+					<gok-chart
+						bind:this={chartEl}
+						type="line"
+						height={280}
+						accessible-label="Net position by year for each plan"
+					></gok-chart>
+				</section>
+			{/if}
+
+			<gok-accordion class="more">
+				<gok-accordion-item heading-level="2">
+					<span slot="summary">Monthly breakdown</span>
+					<div class="breakdown">
 						{#each m.scenarios as s (s.id)}
-							<th scope="col" class:win={win === s.id}>
-								<span class="meta-label sc-tag"
-									>{s.tag}{#if win === s.id}{' · best'}{/if}</span
+							<div class="bd-col">
+								<h3>{s.tag} · {s.title}</h3>
+								<dl>
+									<div>
+										<dt>Interest (before ränteavdrag)</dt>
+										<dd>{formatCurrency(m.monthlyInterest)}</dd>
+									</div>
+									<div>
+										<dt>Amortization</dt>
+										<dd>{formatCurrency(s.amort)}</dd>
+									</div>
+									<div>
+										<dt>Invested</dt>
+										<dd>{formatCurrency(s.invest)}</dd>
+									</div>
+									<div class="rule">
+										<dt>Monthly outlay</dt>
+										<dd>{formatCurrency(s.mortgageCost)}</dd>
+									</div>
+									<div>
+										<dt>+ Avgift</dt>
+										<dd>{formatCurrency(i.monthlyFee)}</dd>
+									</div>
+									<div class="rule">
+										<dt>Total per month</dt>
+										<dd>{formatCurrency(s.total)}</dd>
+									</div>
+									<div>
+										<dt>Back as ränteavdrag</dt>
+										<dd>+{formatCurrency(m.monthlyTaxBenefit)}</dd>
+									</div>
+								</dl>
+								<gok-button
+									variant="secondary"
+									size="s"
+									accessible-label={`60-month schedule, ${s.title}`}
+									use:onClick={() => (openSched = s.id)}>60-month schedule</gok-button
 								>
-								<span class="sc-title">{s.title}</span>
-							</th>
+							</div>
 						{/each}
-					</tr>
-				</thead>
-				<tbody>
-					<tr
-						><th scope="row">Monthly outlay, first month</th>{#each m.scenarios as s (s.id)}<td
-								class:win={win === s.id}>{formatCurrency(s.mortgageCost)}</td
-							>{/each}</tr
-					>
-					<tr
-						><th scope="row">Mortgage paid off</th>{#each m.scenarios as s (s.id)}<td
-								class:win={win === s.id}>{s.payoff.display}</td
-							>{/each}</tr
-					>
-					<tr
-						><th scope="row">Interest paid (before ränteavdrag)</th
-						>{#each m.scenarios as s (s.id)}<td class:win={win === s.id}
-								>{formatCurrency(interestAt(s.id))}</td
-							>{/each}</tr
-					>
-					<tr
-						><th scope="row">Investment value</th>{#each m.scenarios as s (s.id)}<td
-								class:win={win === s.id}>{formatCurrency(investAt(s.id))}</td
-							>{/each}</tr
-					>
-					<tr class="net"
-						><th scope="row">Net position</th>{#each m.scenarios as s (s.id)}<td
-								class:win={win === s.id}
-								class:pos={netAt(s.id) > 0}
-								class:neg={netAt(s.id) < 0}
-								>{netAt(s.id) > 0 ? '+' : ''}{formatCurrency(netAt(s.id))}</td
-							>{/each}</tr
-					>
-				</tbody>
-			</table>
-		</div>
-		<p class="fine">
-			Net position = investment value − any remaining debt − the extra interest (after ränteavdrag)
-			the plan paid compared with Pay it down. Before tax on investment gains.
-		</p>
-	</section>
-
-	{#if m.chart}
-		<section class="block">
-			<div class="block-head"><h2 class="gok-headline-4">Net position over time</h2></div>
-			<gok-chart
-				bind:this={chartEl}
-				type="line"
-				height={280}
-				accessible-label="Net position by year for each plan"
-			></gok-chart>
-		</section>
-	{/if}
-
-	<gok-accordion class="more">
-		<gok-accordion-item heading-level="2">
-			<span slot="summary">Monthly breakdown</span>
-			<div class="breakdown">
-				{#each m.scenarios as s (s.id)}
-					<div class="bd-col">
-						<h3>{s.tag} · {s.title}</h3>
-						<dl>
-							<div>
-								<dt>Interest (before ränteavdrag)</dt>
-								<dd>{formatCurrency(m.monthlyInterest)}</dd>
-							</div>
-							<div>
-								<dt>Amortization</dt>
-								<dd>{formatCurrency(s.amort)}</dd>
-							</div>
-							<div>
-								<dt>Invested</dt>
-								<dd>{formatCurrency(s.invest)}</dd>
-							</div>
-							<div class="rule">
-								<dt>Monthly outlay</dt>
-								<dd>{formatCurrency(s.mortgageCost)}</dd>
-							</div>
-							<div>
-								<dt>+ Avgift</dt>
-								<dd>{formatCurrency(i.monthlyFee)}</dd>
-							</div>
-							<div class="rule">
-								<dt>Total per month</dt>
-								<dd>{formatCurrency(s.total)}</dd>
-							</div>
-							<div>
-								<dt>Back as ränteavdrag</dt>
-								<dd>+{formatCurrency(m.monthlyTaxBenefit)}</dd>
-							</div>
-						</dl>
-						<gok-button
-							variant="secondary"
-							size="s"
-							accessible-label={`60-month schedule, ${s.title}`}
-							use:onClick={() => (openSched = s.id)}>60-month schedule</gok-button
-						>
 					</div>
-				{/each}
-			</div>
-		</gok-accordion-item>
-		<gok-accordion-item heading-level="2">
-			<span slot="summary">If each plan runs to its own payoff</span>
-			<div class="breakdown two">
-				{#each fullCards as { id, card } (id)}
-					<div class="bd-col">
-						<h3>{id} · at full payoff</h3>
-						{#if card}
-							<dl>
-								<div>
-									<dt>Payoff</dt>
-									<dd>{card.payoffDisplay}</dd>
-								</div>
-								<div>
-									<dt>Interest paid (before ränteavdrag)</dt>
-									<dd>{formatCurrency(card.interestPaid)}</dd>
-								</div>
-								<div>
-									<dt>Total paid</dt>
-									<dd>{formatCurrency(card.totalPaid)}</dd>
-								</div>
-								<div>
-									<dt>Investment value</dt>
-									<dd>{formatCurrency(card.investment)}</dd>
-								</div>
-							</dl>
-						{:else}
-							<p class="muted">Never repaid at 0% amortization.</p>
-						{/if}
+				</gok-accordion-item>
+				<gok-accordion-item heading-level="2">
+					<span slot="summary">If each plan runs to its own payoff</span>
+					<div class="breakdown two">
+						{#each fullCards as { id, card } (id)}
+							<div class="bd-col">
+								<h3>{id} · at full payoff</h3>
+								{#if card}
+									<dl>
+										<div>
+											<dt>Payoff</dt>
+											<dd>{card.payoffDisplay}</dd>
+										</div>
+										<div>
+											<dt>Interest paid (before ränteavdrag)</dt>
+											<dd>{formatCurrency(card.interestPaid)}</dd>
+										</div>
+										<div>
+											<dt>Total paid</dt>
+											<dd>{formatCurrency(card.totalPaid)}</dd>
+										</div>
+										<div>
+											<dt>Investment value</dt>
+											<dd>{formatCurrency(card.investment)}</dd>
+										</div>
+									</dl>
+								{:else}
+									<p class="muted">Never repaid at 0% amortization.</p>
+								{/if}
+							</div>
+						{/each}
 					</div>
-				{/each}
-			</div>
-		</gok-accordion-item>
-		<gok-accordion-item heading-level="2">
-			<span slot="summary">Assumptions &amp; method</span>
-			<ul class="assume">
-				<li>
-					Straight-line amortization on the original loan; interest &amp; returns held constant.
-				</li>
-				<li>
-					Ränteavdrag is 30% on the first 100 000 kr of yearly interest per borrower and 21% above,
-					with the loan split equally between borrowers. The monthly fee is excluded from cumulative
-					totals.
-				</li>
-				<li>
-					Net position = investment value − remaining debt − the extra interest, after ränteavdrag,
-					paid compared with Pay it down. A plan that amortizes less pays more interest, and that
-					cash counts against it.
-				</li>
-				<li>Plans B and C may amortize below the legal minimum; banks would not allow that.</li>
-			</ul>
-		</gok-accordion-item>
-	</gok-accordion>
-{:else if m.loanAmount <= 0}
-	<gok-alert status="info" class="notice"
-		>Enter a property value larger than the down payment to see the comparison.</gok-alert
-	>
-{:else}
-	<gok-alert status="info" class="notice"
-		>Pay it down is set to 0% amortization, so its loan is never repaid and there is no payoff date
-		to compare at. Set its amortization above 0%.</gok-alert
-	>
+				</gok-accordion-item>
+				<gok-accordion-item heading-level="2">
+					<span slot="summary">Assumptions &amp; method</span>
+					<ul class="assume">
+						<li>
+							Straight-line amortization on the original loan; interest &amp; returns held constant.
+						</li>
+						<li>
+							Ränteavdrag is 30% on the first 100 000 kr of yearly interest per borrower and 21%
+							above, with the loan split equally between borrowers. The monthly fee is excluded from
+							cumulative totals.
+						</li>
+						<li>
+							Net position = investment value − remaining debt − the extra interest, after
+							ränteavdrag, paid compared with Pay it down. A plan that amortizes less pays more
+							interest, and that cash counts against it.
+						</li>
+						<li>Plans B and C may amortize below the legal minimum; banks would not allow that.</li>
+					</ul>
+				</gok-accordion-item>
+			</gok-accordion>
+		{:else if m.loanAmount <= 0}
+			<gok-alert status="info" class="notice"
+				>Enter a property value larger than the down payment to see the comparison.</gok-alert
+			>
+		{:else}
+			<gok-alert status="info" class="notice"
+				>Pay it down is set to 0% amortization, so its loan is never repaid and there is no payoff
+				date to compare at. Set its amortization above 0%.</gok-alert
+			>
+		{/if}
+
+		<p class="disclaimer">For information only, not financial advice.</p>
+	</div>
+</div>
+
+{#if m.verdict && !resultsInView}
+	<a class="dock" href="#results">
+		<span>
+			<b
+				>{#if m.verdict.lead < 1}The plans finish level{:else}{m.verdict.best.title} ahead{/if}</b
+			>
+			{#if m.verdict.lead >= 1}<span class="dock-lead"
+					>+{formatCurrency(m.verdict.lead)} vs the next plan</span
+				>{/if}
+		</span>
+		<span class="dock-cta">See results</span>
+	</a>
 {/if}
-
-<p class="disclaimer">For information only, not financial advice.</p>
 
 <ScheduleDialog
 	open={openSched !== ''}
@@ -312,8 +364,123 @@
 		color: var(--gok-color-text-muted);
 		max-width: 60ch;
 	}
+	.split {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--gok-space-800, 48px);
+	}
+	.results {
+		container-type: inline-size;
+		min-inline-size: 0;
+	}
+	@media (min-width: 900px) {
+		.split {
+			grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
+			gap: var(--gok-space-900, 64px);
+			align-items: start;
+		}
+		/* The inputs stay on screen while the results scroll, so every edit shows its effect. */
+		.inputs {
+			position: sticky;
+			top: var(--gok-space-400, 16px);
+			max-block-size: calc(100dvh - 2 * var(--gok-space-400, 16px));
+			overflow-y: auto;
+			overscroll-behavior: contain;
+			padding-inline-end: var(--gok-space-300, 12px);
+		}
+	}
+	.results > :first-child {
+		margin-top: 0;
+	}
 	.verdict {
-		margin: var(--gok-space-900, 64px) 0 0;
+		margin: 0;
+	}
+	.rank {
+		list-style: none;
+		margin: var(--gok-space-600, 32px) 0 0;
+		padding: 0;
+		display: grid;
+		gap: var(--gok-space-300, 12px);
+		max-inline-size: 36rem;
+	}
+	.rank li {
+		display: grid;
+		grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+		gap: var(--gok-space-100, 4px) var(--gok-space-300, 12px);
+		align-items: center;
+	}
+	.rank .tag {
+		display: inline-grid;
+		place-items: center;
+		inline-size: 1.5rem;
+		block-size: 1.5rem;
+		border: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
+		border-radius: var(--gok-radius-s);
+		font-family: var(--gok-font-family-mono);
+		font-size: 0.75rem;
+		font-weight: var(--gok-font-weight-semibold, 600);
+	}
+	.rank .val {
+		font-variant-numeric: tabular-nums;
+	}
+	.rank .bar {
+		grid-column: 2 / 4;
+		block-size: 6px;
+		background: var(--gok-color-border);
+	}
+	.rank .bar i {
+		display: block;
+		block-size: 100%;
+		background: var(--gok-color-text-muted);
+	}
+	.rank .win .tag {
+		border-color: var(--gok-color-primary);
+		color: var(--gok-color-primary);
+	}
+	.rank .win .val {
+		color: var(--gok-color-primary);
+		font-weight: var(--gok-font-weight-semibold, 600);
+	}
+	.rank .win .bar i {
+		background: var(--gok-color-primary);
+	}
+	.dock {
+		display: none;
+	}
+	@media (max-width: 899.98px) {
+		.dock {
+			display: flex;
+			position: fixed;
+			inset: auto 0 0;
+			z-index: 10;
+			justify-content: space-between;
+			align-items: center;
+			gap: var(--gok-space-300, 12px);
+			padding: var(--gok-space-300, 12px)
+				max(var(--gok-space-400, 16px), env(safe-area-inset-right))
+				calc(var(--gok-space-300, 12px) + env(safe-area-inset-bottom))
+				max(var(--gok-space-400, 16px), env(safe-area-inset-left));
+			background: var(--gok-color-surface);
+			border-top: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
+			color: var(--gok-color-text);
+			text-decoration: none;
+		}
+		.dock b {
+			display: block;
+			font-weight: var(--gok-font-weight-semibold, 600);
+		}
+		.dock-lead {
+			color: var(--gok-color-primary);
+			font-variant-numeric: tabular-nums;
+			font-size: var(--gok-type-body-small-size, 14px);
+		}
+		.dock-cta {
+			flex: none;
+			padding: var(--gok-space-200, 8px) var(--gok-space-300, 12px);
+			border: 1px solid var(--gok-color-border-strong, var(--gok-color-border));
+			border-radius: var(--gok-radius-s);
+			font-size: var(--gok-type-body-small-size, 14px);
+		}
 	}
 	.statement {
 		margin: var(--gok-space-300, 12px) 0 0;
@@ -346,7 +513,7 @@
 	}
 	.compare th,
 	.compare td {
-		padding: var(--gok-space-400, 16px);
+		padding: var(--gok-space-300, 12px);
 		text-align: right;
 		border-bottom: 1px solid var(--gok-color-border);
 		vertical-align: baseline;
@@ -358,6 +525,9 @@
 		text-align: left;
 		font-weight: 400;
 		color: var(--gok-color-text-muted);
+		min-inline-size: 8rem;
+	}
+	.compare td {
 		white-space: nowrap;
 	}
 	.sc-tag {
@@ -429,7 +599,7 @@
 	.breakdown.two {
 		grid-template-columns: repeat(2, 1fr);
 	}
-	@media (max-width: 760px) {
+	@container (max-width: 640px) {
 		.breakdown,
 		.breakdown.two {
 			grid-template-columns: 1fr;
