@@ -45,23 +45,27 @@
 	const rankMax = $derived(Math.max(1, ...ranked.map((r) => r.net)));
 	const signed = (n: number) => `${n > 0 ? '+' : ''}${formatCurrency(n)}`;
 
-	// One short line under the ranking: plans a bank would refuse sit out of it, and a winner that
-	// only leads by spending more each month says so.
+	// Plans left out of the ranking, by name: a bank would refuse them, or B has nothing to invest.
 	const note = $derived.by(() => {
+		if (m.loanAmount <= 0) return '';
 		const out: string[] = [];
 		const refused = m.scenarios.filter((s) => s.id !== 'A' && s.rate < m.minAmortization);
-		if (m.loanAmount > 0 && refused.length)
+		if (refused.length)
 			out.push(
-				`${refused.map((s) => s.tag).join(', ')} below the ${m.minAmortization.toFixed(1)}% minimum`
+				`${refused.map((s) => s.title).join(' and ')} ${refused.length > 1 ? 'are' : 'is'} below the ${m.minAmortization.toFixed(1)}% minimum`
 			);
-		const w = m.scenarios.find((s) => s.id === win);
-		const extra = w ? w.mortgageCost - m.scenarios[0].mortgageCost : 0;
-		if (w && extra >= 1) out.push(`${w.title} costs ${formatCurrency(extra)} more a month`);
-		return out.join(' · ');
+		if (i.bRate >= i.aRate) out.push('Invest the difference needs a lower rate than Pay it down');
+		return out.join('. ');
 	});
+	// A winner that also costs more each month says so on its row.
+	const extra = $derived.by(() => {
+		const w = m.scenarios.find((s) => s.id === win);
+		return w ? w.mortgageCost - m.scenarios[0].mortgageCost : 0;
+	});
+	const i = $derived(m.inputs);
 	type Plan = (typeof m.scenarios)[number];
 	const rows: [string, (s: Plan) => string][] = [
-		['Monthly cost', (s) => formatCurrency(s.mortgageCost)],
+		['Monthly cost, before ränteavdrag', (s) => formatCurrency(s.mortgageCost)],
 		['Amortization / month', (s) => formatCurrency(s.amort)],
 		['Invested / month', (s) => formatCurrency(s.invest)],
 		['Paid off in', (s) => s.payoff.display],
@@ -86,12 +90,11 @@
 
 <div class="split">
 	<div class="answer" {@attach watch((v) => (answerInView = v))}>
-		{#if cmp && best}
-			{#if m.downPaymentError}
-				<gok-alert status="warning" class="notice"
-					>Banks need at least {m.downShare * 100}% down, so no bank would lend this.</gok-alert
-				>
-			{/if}
+		{#if m.downPaymentError}
+			<gok-alert status="warning" class="notice"
+				>Banks need at least {m.downShare * 100}% down, so no bank would lend this.</gok-alert
+			>
+		{:else if cmp && best}
 			<section class="verdict">
 				<span class="meta-label">After {cmp.payoffDisplay}</span>
 				<h2 class="statement">
@@ -110,7 +113,7 @@
 	<aside class="inputs" aria-label="Your numbers">
 		<Setup model={m} />
 	</aside>
-	{#if best && !resultsInView && !answerInView}
+	{#if best && !m.downPaymentError && !resultsInView && !answerInView}
 		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
 			<span>
 				<b>{best.title} ahead</b>
@@ -122,25 +125,27 @@
 	{/if}
 
 	<div class="results" id="results" {@attach watch((v) => (resultsInView = v))}>
-		{#if cmp && best}
+		{#if m.downPaymentError}
+			<!-- The warning above says it all; no ranking for a loan no bank would grant. -->
+		{:else if cmp && best}
 			<div class="rank-wrap" {@attach padRoot('Top', '(min-width: 900px)')}>
 				<p class="meta-label rank-cap" id="rank-cap">Net position vs Pay it down, before ISK tax</p>
-				<ol class="rank" aria-labelledby="rank-cap">
-					{#each ranked as r (r.id)}
-						<li class:win={win === r.id}>
-							<span class="tag" aria-hidden="true">{r.tag}</span>
-							<span class="name"
-								>{r.title}{#if win === r.id}<span class="meta-label">{' · best'}</span>{/if}</span
-							>
-							<span class="val" class:neg={r.net < 0}
-								>{r.id === 'A' ? 'baseline' : signed(r.net)}</span
-							>
-							<span class="bar" aria-hidden="true"
-								><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
-							>
-						</li>
-					{/each}
-				</ol>
+				{#if ranked.length > 1}<ol class="rank" aria-labelledby="rank-cap">
+						{#each ranked as r (r.id)}
+							<li class:win={win === r.id}>
+								<span class="tag" aria-hidden="true">{r.tag}</span>
+								<span class="name"
+									>{r.title}{#if win === r.id}<span class="meta-label"
+											>{' · best'}{#if extra >= 1}{` · ${formatCurrency(extra)} more a month`}{/if}</span
+										>{/if}</span
+								>
+								<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
+								<span class="bar" aria-hidden="true"
+									><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
+								>
+							</li>
+						{/each}
+					</ol>{/if}
 				{#if note}<p class="rank-warn">⚠ {note}</p>{/if}
 			</div>
 
@@ -172,19 +177,12 @@
 								{/each}
 								<tr class="net"
 									><th scope="row">Net position</th>{#each m.scenarios as s (s.id)}<td
-											class:win={win === s.id}
-											class:pos={cmp.same[s.id].net > 0}
-											class:neg={cmp.same[s.id].net < 0}>{signed(cmp.same[s.id].net)}</td
+											class:win={win === s.id}>{signed(cmp.same[s.id].net)}</td
 										>{/each}</tr
 								>
 							</tbody>
 						</table>
 					</div>
-					<p class="fine">
-						First-month interest is {formatCurrency(m.monthlyInterest)} for every plan, with {formatCurrency(
-							m.monthlyTaxBenefit
-						)} back as ränteavdrag.
-					</p>
 				</gok-accordion-item>
 				<gok-accordion-item heading-level="2">
 					<span slot="summary">How it's calculated</span>
@@ -201,7 +199,6 @@
 						<li>
 							Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
 						</li>
-						<li>Plans below the legal amortization minimum are left out of the ranking.</li>
 					</ul>
 				</gok-accordion-item>
 			</gok-accordion>
@@ -431,23 +428,12 @@
 		box-shadow: inset 2px 0 0 0 var(--gok-color-primary);
 		background: var(--gok-color-accent-subtle, transparent);
 	}
-	.pos {
-		color: var(--gok-color-status-success-text);
-	}
 	.neg {
 		color: var(--gok-color-status-error-text);
-	}
-	.fine {
-		margin: var(--gok-space-300, 12px) 0 0;
-		font-size: var(--gok-type-caption-size, 0.75rem);
-		color: var(--gok-color-text-muted);
 	}
 	.notice {
 		display: block;
 		margin-top: var(--gok-space-800, 48px);
-	}
-	.notice + .verdict {
-		margin-top: var(--gok-space-600, 32px);
 	}
 	.more {
 		margin-top: var(--gok-space-700, 40px);

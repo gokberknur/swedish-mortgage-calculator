@@ -76,7 +76,8 @@
 		></gok-number-input>
 	</div>
 	<p class="summary">
-		Loan <b>{formatCurrency(model.loanAmount)}</b> · LTV <b>{model.ltv.toFixed(1)}%</b><br />
+		Loan <b>{formatCurrency(model.loanAmount)}</b> · Loan-to-value <b>{model.ltv.toFixed(1)}%</b><br
+		/>
 		Min amortization
 		<b
 			>{#if model.loanAmount > 0}{model.minAmortization.toFixed(1)}%/yr{:else}–{/if}</b
@@ -108,20 +109,18 @@
 					<gok-segmented-item value="1">One borrower</gok-segmented-item>
 					<gok-segmented-item value="2">Two borrowers</gok-segmented-item>
 				</gok-segmented>
-				<div class="fields">
-					{#if i.legacy}
-						<gok-number-input
-							label="Household income (SEK/yr)"
-							value={i.annualSalary}
-							min="0"
-							helper="All borrowers, before tax"
-							locale="sv-SE"
-							step="10000"
-							oninput={set('annualSalary')}
-							onchange={restore('annualSalary')}
-						></gok-number-input>
-					{/if}
-				</div>
+				{#if i.legacy}
+					<gok-number-input
+						label="Household income (SEK/yr)"
+						value={i.annualSalary}
+						min="0"
+						helper="All borrowers, before tax"
+						locale="sv-SE"
+						step="10000"
+						oninput={set('annualSalary')}
+						onchange={restore('annualSalary')}
+					></gok-number-input>
+				{/if}
 			</div>
 		</gok-accordion-item>
 	</gok-accordion>
@@ -131,7 +130,6 @@
 	<h2 class="gok-headline-5" id="plans-h">Your plans</h2>
 	<gok-number-input
 		label="Investment return (%/yr)"
-		helper="Before ISK tax"
 		value={i.investmentReturn}
 		min="0"
 		max="20"
@@ -214,9 +212,11 @@
 				>Source: Regeringen<span class="vh">{' (opens in a new tab)'}</span> ↗</a
 			>
 		{/if}
-		<br />Your LTV is {model.ltv.toFixed(1)}%{#if i.legacy}{' and your LTI '}{model.lti.toFixed(
-				2
-			)}×{/if}, so the minimum is {model.minAmortization.toFixed(1)}% a year.
+		<br />Your loan-to-value is {model.ltv.toFixed(
+			1
+		)}%{#if i.legacy}{' and your debt-to-income '}{model.lti.toFixed(2)}×{/if}, so the minimum is {model.minAmortization.toFixed(
+			1
+		)}% a year.
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
@@ -264,9 +264,6 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--gok-space-400, 16px);
-		inline-size: 100%;
-	}
-	.options .fields {
 		inline-size: 100%;
 	}
 	.fields {
