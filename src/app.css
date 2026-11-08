@@ -1,0 +1,95 @@
+/*
+ * Global styles, built on @gokberknur/design-system tokens. Fonts, tokens, typography and layout
+ * utilities come from the design-system CSS imported in +layout.svelte.
+ */
+
+/* Flat "paper & ink" register: near-square corners everywhere and no chip fills. */
+:root {
+	--gok-radius-m: var(--gok-radius-s);
+	--gok-radius-l: var(--gok-radius-s);
+	--gok-tag-radius: var(--gok-radius-s);
+	--gok-tag-background-color: transparent;
+	--gok-badge-background-color: transparent;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	background: var(--gok-background);
+	color: var(--gok-color-text);
+	font-family: var(--gok-font-family-text);
+	font-size: var(--gok-type-body-regular-size, 16px);
+	line-height: var(--gok-type-body-regular-line, 1.5rem);
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: var(--gok-color-link);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+:focus-visible {
+	outline: 2px solid var(--gok-color-focus-ring, var(--gok-color-primary));
+	outline-offset: 2px;
+}
+
+.app-bar,
+.app-main,
+.app-foot {
+	width: 100%;
+	max-width: var(--gok-container-content, 1200px);
+	margin-inline: auto;
+	padding-inline: var(--gok-container-inline-pad, clamp(24px, 5vw, 64px));
+}
+
+.app-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-block: var(--gok-space-400, 16px);
+}
+
+.app-main {
+	flex: 1;
+	padding-block: var(--gok-space-800, 48px);
+}
+
+.app-foot {
+	padding-block: var(--gok-space-600, 32px);
+	border-top: 1px solid var(--gok-color-border);
+}
+
+.page-head {
+	max-width: var(--gok-container-prose, 72ch);
+	margin-bottom: var(--gok-space-800, 48px);
+}
+
+.page-head p {
+	color: var(--gok-color-text-muted);
+	margin-top: var(--gok-space-300, 12px);
+}
+
+/* Mono uppercase micro-label for labels, dates and counts. */
+.meta-label {
+	font-family: var(--gok-font-family-mono);
+	font-size: var(--gok-type-footnote-size, 0.75rem);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--gok-color-text-muted);
+}
