@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { on } from 'svelte/events';
-	import Eyebrow from '$lib/components/Eyebrow.svelte';
 	import Setup from '$lib/components/Setup.svelte';
 	import ScheduleDialog from '$lib/components/ScheduleDialog.svelte';
 	import { formatCurrency } from '$lib/mortgage';
@@ -71,7 +70,7 @@
 	// spending more each month.
 	const notAllowed = $derived.by(() => {
 		const best = m.scenarios.find((s) => s.id === win);
-		return !!best && best.rate < m.requirements.totalMinimum;
+		return !!best && best.rate < m.minAmortization;
 	});
 	const caveats = $derived.by(() => {
 		const best = m.scenarios.find((s) => s.id === win);
@@ -80,8 +79,8 @@
 		const out: { long: string; short: string }[] = [];
 		if (notAllowed)
 			out.push({
-				long: `A bank won't allow ${best.title}: ${best.rate}% is below the ${m.requirements.totalMinimum.toFixed(1)}% minimum.`,
-				short: `${best.title} is below the ${m.requirements.totalMinimum.toFixed(1)}% minimum`
+				long: `A bank won't allow ${best.title}: ${best.rate}% is below the ${m.minAmortization.toFixed(1)}% minimum.`,
+				short: `${best.title} is below the ${m.minAmortization.toFixed(1)}% minimum`
 			});
 		const extra = best.mortgageCost - a.mortgageCost;
 		if (extra >= 1)
@@ -114,7 +113,7 @@
 </svelte:head>
 
 <div class="page-head">
-	<Eyebrow text="Tool · Sweden" />
+	<p class="eyebrow meta-label"><span aria-hidden="true"></span>Tool · Sweden</p>
 	<h1 class="gok-headline-1">Swedish Mortgage Calculator</h1>
 	<p>Pay off your mortgage faster, or invest instead?</p>
 </div>
@@ -404,6 +403,17 @@
 	}
 	.block-head h2 {
 		margin: 0;
+	}
+	.eyebrow {
+		display: flex;
+		align-items: center;
+		gap: var(--gok-space-300, 12px);
+		margin: 0 0 var(--gok-space-400, 16px);
+	}
+	.eyebrow span {
+		inline-size: 24px;
+		block-size: 2px;
+		background: var(--gok-color-primary);
 	}
 	.split {
 		display: grid;

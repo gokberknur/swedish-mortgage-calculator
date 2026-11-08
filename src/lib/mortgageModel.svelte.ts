@@ -15,8 +15,7 @@ import {
 	calculateMonthlyTaxBenefit,
 	calculateMonthlyAmortization,
 	calculatePayoffTime,
-	calculateScenario,
-	calculateTotalInterestPaid,
+	interestOver,
 	calculateInvestmentGrowth,
 	buildScenarioSchedule,
 	formatCurrency,
@@ -95,7 +94,7 @@ export function createMortgageModel() {
 	const loanAmount = $derived(calculateLoanAmount(inputs.propertyValue, inputs.downPayment));
 	const ltv = $derived(calculateLTV(loanAmount, inputs.propertyValue));
 	const lti = $derived(calculateLTI(loanAmount, inputs.annualSalary));
-	const requirements = $derived(calculateSwedishAmortization(ltv, lti, inputs.legacy));
+	const minAmortization = $derived(calculateSwedishAmortization(ltv, lti, inputs.legacy));
 	const downShare = $derived(minDownShare(inputs.legacy));
 	const minDownPayment = $derived(inputs.propertyValue * downShare);
 	const downPaymentError = $derived(
@@ -108,7 +107,7 @@ export function createMortgageModel() {
 			? `Enter a value above your down payment of ${formatCurrency(inputs.downPayment)}`
 			: ''
 	);
-	const meetsRequirement = $derived(inputs.aRate >= requirements.totalMinimum);
+	const meetsRequirement = $derived(inputs.aRate >= minAmortization);
 
 	const monthlyInterest = $derived(calculateMonthlyInterest(loanAmount, inputs.interestRate));
 	const monthlyTaxBenefit = $derived(calculateMonthlyTaxBenefit(monthlyInterest, inputs.borrowers));
@@ -152,8 +151,8 @@ export function createMortgageModel() {
 	]);
 
 	const comparison = $derived.by(() => {
-		const a = calculateScenario(loanAmount, inputs.interestRate, inputs.aRate);
-		const months = a.payoffTime.totalMonths;
+		const a = scenarios[0].payoff;
+		const months = a.totalMonths;
 		if (!isFinite(months)) return null;
 
 		const plans: Record<ScenarioId, { rate: number; monthly: number }> = {
@@ -162,12 +161,12 @@ export function createMortgageModel() {
 			C: { rate: inputs.cRate, monthly: inputs.cInvestmentAmount }
 		};
 		const at = (id: ScenarioId, n: number) => ({
-			interestPaid: calculateTotalInterestPaid(
+			interestPaid: interestOver(
 				loanAmount,
 				calculateMonthlyAmortization(loanAmount, plans[id].rate),
 				inputs.interestRate,
 				n
-			),
+			).interest,
 			investment: calculateInvestmentGrowth(plans[id].monthly, inputs.investmentReturn, n)
 		});
 		const net = (id: ScenarioId, n: number) =>
@@ -197,7 +196,7 @@ export function createMortgageModel() {
 
 		return {
 			months,
-			payoffDisplay: a.payoffTime.display,
+			payoffDisplay: a.display,
 			same,
 			full: { B: full('B'), C: full('C') }
 		};
@@ -286,8 +285,8 @@ export function createMortgageModel() {
 		get lti() {
 			return lti;
 		},
-		get requirements() {
-			return requirements;
+		get minAmortization() {
+			return minAmortization;
 		},
 		get downShare() {
 			return downShare;

@@ -36,8 +36,8 @@
 	const i = $derived(model.inputs);
 	// Plans B and C may go below the legal minimum to explore; say so instead of blocking it.
 	const belowMin = (rate: number) =>
-		model.loanAmount > 0 && rate < model.requirements.totalMinimum
-			? `Below the ${model.requirements.totalMinimum.toFixed(1)}% legal minimum`
+		model.loanAmount > 0 && rate < model.minAmortization
+			? `Below the ${model.minAmortization.toFixed(1)}% legal minimum`
 			: '';
 </script>
 
@@ -79,7 +79,7 @@
 		Loan <b>{formatCurrency(model.loanAmount)}</b> · LTV <b>{model.ltv.toFixed(1)}%</b><br />
 		Min amortization
 		<b
-			>{#if model.loanAmount > 0}{model.requirements.totalMinimum.toFixed(1)}%/yr{:else}–{/if}</b
+			>{#if model.loanAmount > 0}{model.minAmortization.toFixed(1)}%/yr{:else}–{/if}</b
 		>
 		<gok-button
 			variant="tertiary"
@@ -163,9 +163,7 @@
 						min="0"
 						max="10"
 						step="0.1"
-						error={model.meetsRequirement
-							? ''
-							: `Minimum is ${model.requirements.totalMinimum.toFixed(1)}%`}
+						error={model.meetsRequirement ? '' : `Minimum is ${model.minAmortization.toFixed(1)}%`}
 						oninput={set('aRate')}
 						onchange={restore('aRate')}
 					></gok-number-input>
@@ -227,7 +225,7 @@
 		{/if}
 		<br />Your LTV is {model.ltv.toFixed(1)}%{#if i.legacy}{' and your LTI '}{model.lti.toFixed(
 				2
-			)}×{/if}, so the minimum is {model.requirements.totalMinimum.toFixed(1)}% a year.
+			)}×{/if}, so the minimum is {model.minAmortization.toFixed(1)}% a year.
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
