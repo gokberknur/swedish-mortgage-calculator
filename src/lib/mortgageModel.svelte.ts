@@ -83,15 +83,15 @@ export function createMortgageModel() {
 	const minAmortization = $derived(calculateSwedishAmortization(ltv, lti, inputs.legacy));
 	const downShare = $derived(minDownShare(inputs.legacy));
 	const minDownPayment = $derived(inputs.propertyValue * downShare);
+	const propertyError = $derived(inputs.propertyValue > 0 ? '' : 'Enter a property value');
 	const downPaymentError = $derived(
-		inputs.downPayment < minDownPayment && inputs.propertyValue > 0
-			? `Enter at least ${formatCurrency(minDownPayment)} (${downShare * 100}% of the property value)`
-			: ''
-	);
-	const propertyError = $derived(
-		inputs.propertyValue > 0 && loanAmount <= 0
-			? `Enter a value above your down payment of ${formatCurrency(inputs.downPayment)}`
-			: ''
+		inputs.propertyValue <= 0
+			? ''
+			: inputs.downPayment >= inputs.propertyValue
+				? 'Must be below the property value'
+				: inputs.downPayment < minDownPayment
+					? `Enter at least ${formatCurrency(minDownPayment)} (${downShare * 100}% of the property value)`
+					: ''
 	);
 	const meetsRequirement = $derived(inputs.aRate >= minAmortization);
 

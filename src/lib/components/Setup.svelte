@@ -71,17 +71,18 @@
 		></gok-number-input>
 	</div>
 	<p class="summary">
-		Loan <b>{formatCurrency(model.loanAmount)}</b> · Loan-to-value <b>{model.ltv.toFixed(1)}%</b><br
-		/>
+		Loan <b>{model.loanAmount > 0 ? formatCurrency(model.loanAmount) : '–'}</b> · Loan-to-value
+		<b>{model.loanAmount > 0 ? `${model.ltv.toFixed(1)}%` : '–'}</b><br />
 		Min amortization
 		<b
 			>{#if model.loanAmount > 0}{model.minAmortization.toFixed(1)}%/yr{:else}–{/if}</b
 		>
-		<gok-button
-			variant="tertiary"
-			size="s"
-			{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = true))}>Rules</gok-button
-		>
+		{#if model.loanAmount > 0}<gok-button
+				variant="tertiary"
+				size="s"
+				{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = true))}
+				>Why {model.minAmortization.toFixed(1)}%?</gok-button
+			>{/if}
 	</p>
 	<gok-accordion class="more">
 		<gok-accordion-item heading-level="3">
@@ -222,7 +223,8 @@
 		</li>
 		{#if i.legacy}
 			<li class:on={model.lti > 4.5}>
-				LTI &gt; 4.5× → +1%/yr{#if model.lti > 4.5}<span class="applies">{' · applies to you'}</span
+				Loan &gt; 4.5× income → +1%/yr{#if model.lti > 4.5}<span class="applies"
+						>{' · applies to you'}</span
 					>{/if}
 			</li>
 		{/if}

@@ -96,34 +96,6 @@
 </div>
 
 <div class="split">
-	<div
-		class="answer"
-		{@attach watch((v) => (answerInView = v))}
-		{@attach (n: HTMLElement) => {
-			const ro = new ResizeObserver(() =>
-				n.parentElement!.style.setProperty('--answer-h', `${n.offsetHeight + 24}px`)
-			);
-			ro.observe(n);
-			return () => ro.disconnect();
-		}}
-	>
-		{#if cmp && best && !invalid}
-			<section class="verdict">
-				<span class="meta-label">When Pay it down is paid off · {cmp.payoffDisplay}</span>
-				<h2 class="statement">
-					<span role="status">
-						{#if ranked.length === 1}Only Pay it down qualifies.{:else if m.verdict!.lead < 1}The
-							plans come out even.{:else}{best.title}
-							comes out ahead.{#if win !== 'A'}<span class="vh"
-									>{` ${signed(winNet)} vs Pay it down.`}</span
-								>{/if}{/if}
-					</span>
-				</h2>
-				{#if win !== 'A'}<p class="lead">{signed(winNet)} vs Pay it down, before ISK tax</p>{/if}
-			</section>
-		{/if}
-	</div>
-
 	<aside class="inputs" aria-label="Your numbers">
 		<Setup model={m} />
 	</aside>
@@ -131,104 +103,121 @@
 		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
 			<span>
 				<b>{ranked.length === 1 ? 'Only Pay it down qualifies' : `${best.title} ahead`}</b>
-				{#if win !== 'A'}<span class="dock-lead"
-						>{signed(winNet)} vs Pay it down, before ISK tax</span
-					>{/if}
+				{#if win !== 'A'}<span class="dock-lead">{signed(winNet)} vs Pay it down</span>{/if}
 				{#if note}<span class="dock-warn">⚠ {note}</span>{/if}
 			</span>
 			<span class="dock-cta">See results</span>
 		</a>
 	{/if}
 
-	<div class="results" id="results" {@attach watch((v) => (resultsInView = v))}>
-		{#if invalid}
-			<!-- The field error says what to fix; there is no answer for a loan no bank would grant. -->
-		{:else if cmp && best}
-			<div class="rank-wrap">
-				{#if ranked.length > 1}<p class="meta-label rank-cap" id="rank-cap">
-						Net position vs Pay it down, before ISK tax
-					</p>
-					<ol class="rank" aria-labelledby="rank-cap">
-						{#each ranked as r (r.id)}
-							<li class:win={win === r.id}>
-								<span class="tag" aria-hidden="true">{r.tag}</span>
-								<span class="name"
-									>{r.title}{#if win === r.id}<span class="meta-label"
-											>{' · best'}{#if extra >= 1}{` · ${formatCurrency(extra)} more a month`}{/if}</span
-										>{/if}</span
-								>
-								<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
-								<span class="bar" aria-hidden="true"
-									><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
-								>
-							</li>
-						{/each}
-					</ol>{/if}
-				{#if note}<p class="rank-warn">⚠ {note}</p>{/if}
-			</div>
+	<div class="right">
+		<div class="answer" {@attach watch((v) => (answerInView = v))}>
+			{#if cmp && best && !invalid}
+				<section class="verdict">
+					<span class="meta-label">In {cmp.payoffDisplay}</span>
+					<h2 class="statement">
+						<span role="status">
+							{#if ranked.length === 1}Only Pay it down qualifies.{:else if m.verdict!.lead < 1}The
+								plans come out even.{:else}{best.title}
+								comes out ahead.{#if win !== 'A'}<span class="vh"
+										>{` ${signed(winNet)} vs Pay it down.`}</span
+									>{/if}{/if}
+						</span>
+					</h2>
+					{#if win !== 'A'}<p class="lead">{signed(winNet)} vs Pay it down</p>{/if}
+				</section>
+			{/if}
+		</div>
 
-			<gok-accordion class="more">
-				<gok-accordion-item heading-level="2">
-					<span slot="summary">Compare in detail</span>
-					<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
-					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-					<div class="table-scroll" role="region" aria-label="Plan comparison" tabindex="0">
-						<table class="compare">
-							<thead>
-								<tr>
-									<th scope="col"><span class="vh">Metric</span></th>
-									{#each columns as s (s.id)}
-										<th scope="col" class:win={win === s.id}>
-											<span class="meta-label sc-tag">{s.tag}</span>
-											<span class="sc-title">{s.title}</span>
-										</th>
+		<div class="results" id="results" {@attach watch((v) => (resultsInView = v))}>
+			{#if invalid}
+				<!-- The field error says what to fix; there is no answer for a loan no bank would grant. -->
+			{:else if cmp && best}
+				<div class="rank-wrap">
+					{#if ranked.length > 1}<p class="meta-label rank-cap" id="rank-cap">
+							Net position vs Pay it down, before ISK tax
+						</p>
+						<ol class="rank" aria-labelledby="rank-cap">
+							{#each ranked as r (r.id)}
+								<li class:win={win === r.id}>
+									<span class="tag" aria-hidden="true">{r.tag}</span>
+									<span class="name"
+										>{r.title}{#if win === r.id}<span class="meta-label"
+												>{#if extra >= 1}{` · ${formatCurrency(extra)} more a month`}{/if}</span
+											>{/if}</span
+									>
+									<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
+									<span class="bar" aria-hidden="true"
+										><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
+									>
+								</li>
+							{/each}
+						</ol>{/if}
+					{#if note}<p class="rank-warn">⚠ {note}</p>{/if}
+				</div>
+
+				<gok-accordion class="more">
+					<gok-accordion-item heading-level="2">
+						<span slot="summary">Compare in detail</span>
+						<!-- A scrollable region must be focusable so keyboard users can scroll it on phones. -->
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+						<div class="table-scroll" role="region" aria-label="Plan comparison" tabindex="0">
+							<table class="compare">
+								<thead>
+									<tr>
+										<th scope="col"><span class="vh">Metric</span></th>
+										{#each columns as s (s.id)}
+											<th scope="col" class:win={win === s.id}>
+												<span class="meta-label sc-tag">{s.tag}</span>
+												<span class="sc-title">{s.title}</span>
+											</th>
+										{/each}
+									</tr>
+								</thead>
+								<tbody>
+									{#each rows as [label, cell] (label)}
+										<tr
+											><th scope="row">{label}</th>{#each columns as s (s.id)}<td
+													class:win={win === s.id}>{cell(s)}</td
+												>{/each}</tr
+										>
 									{/each}
-								</tr>
-							</thead>
-							<tbody>
-								{#each rows as [label, cell] (label)}
-									<tr
-										><th scope="row">{label}</th>{#each columns as s (s.id)}<td
-												class:win={win === s.id}>{cell(s)}</td
+									<tr class="net"
+										><th scope="row">Net position</th>{#each columns as s (s.id)}<td
+												class:win={win === s.id}>{signed(cmp.same[s.id].net)}</td
 											>{/each}</tr
 									>
-								{/each}
-								<tr class="net"
-									><th scope="row">Net position</th>{#each columns as s (s.id)}<td
-											class:win={win === s.id}>{signed(cmp.same[s.id].net)}</td
-										>{/each}</tr
-								>
-							</tbody>
-						</table>
-					</div>
-					<p class="fine">Costs and interest before ränteavdrag; investments before ISK tax.</p>
-				</gok-accordion-item>
-				<gok-accordion-item heading-level="2">
-					<span slot="summary">How it's calculated</span>
-					<ul class="assume">
-						<li>Every plan is judged on the day Pay it down clears the loan.</li>
-						<li>
-							Net position: investment value, minus remaining debt, minus the extra interest (after
-							ränteavdrag) a plan pays compared with Pay it down.
-						</li>
-						<li>
-							Amortization is a fixed share of the original loan. Interest and returns stay
-							constant; returns are before ISK tax.
-						</li>
-						<li>
-							Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
-						</li>
-					</ul>
-				</gok-accordion-item>
-			</gok-accordion>
-		{:else}
-			<gok-alert status="info" class="notice"
-				>Set Pay it down's amortization above 0%. At 0% the loan is never repaid, so there is no
-				date to compare the plans at.</gok-alert
-			>
-		{/if}
-
-		<p class="disclaimer">For information only, not financial advice.</p>
+								</tbody>
+							</table>
+						</div>
+						<p class="fine">Costs and interest before ränteavdrag; investments before ISK tax.</p>
+					</gok-accordion-item>
+					<gok-accordion-item heading-level="2">
+						<span slot="summary">How it's calculated</span>
+						<ul class="assume">
+							<li>Every plan is judged on the day Pay it down clears the loan.</li>
+							<li>
+								Net position: investment value, minus remaining debt, minus the extra interest
+								(after ränteavdrag) a plan pays compared with Pay it down.
+							</li>
+							<li>
+								Amortization is a fixed share of the original loan. Interest and returns stay
+								constant; returns are before ISK tax.
+							</li>
+							<li>
+								Ränteavdrag: 30% of the first 100 000 kr of yearly interest per borrower, 21% above.
+							</li>
+						</ul>
+					</gok-accordion-item>
+				</gok-accordion>
+				<p class="disclaimer">For information only, not financial advice.</p>
+			{:else}
+				<gok-alert status="info" class="notice"
+					>Set Pay it down's amortization above 0%. At 0% the loan is never repaid, so there is no
+					date to compare the plans at.</gok-alert
+				>
+			{/if}
+		</div>
 	</div>
 </div>
 
@@ -242,32 +231,36 @@
 		container-type: inline-size;
 		min-inline-size: 0;
 	}
-	/* Phones read top to bottom: answer, inputs, details. Wide screens put the inputs on the left,
-	   beside the answer and the details. */
+	/* Phones read top to bottom: answer, inputs, details. The answer is moved first visually; it
+	   holds no controls, so the keyboard order still runs inputs, then details. Wide screens put
+	   the inputs on the left, beside the answer and the details. */
+	.right {
+		display: contents;
+	}
+	.answer {
+		order: -1;
+	}
 	@media (min-width: 900px) {
 		.split {
 			grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
-			grid-template-rows: auto 1fr;
-			grid-template-areas: 'inputs answer' 'inputs results';
+			grid-template-areas: 'inputs right';
 			gap: var(--gok-space-600, 32px) var(--gok-space-900, 64px);
 		}
 		.inputs {
 			grid-area: inputs;
 		}
-		/* The verdict and the results stay in view while you edit the inputs beside them: both pin,
-		   the results just under the verdict. */
-		.answer {
-			grid-area: answer;
+		/* The verdict and the results pin together beside the inputs; if they outgrow the screen,
+		   the column scrolls on its own. */
+		.right {
+			grid-area: right;
 			position: sticky;
 			top: var(--gok-space-400, 16px);
-			z-index: 1;
 			align-self: start;
-		}
-		.results {
-			grid-area: results;
-			position: sticky;
-			top: calc(var(--gok-space-400, 16px) + var(--answer-h, 0px));
-			align-self: start;
+			max-block-size: calc(100dvh - 2 * var(--gok-space-400, 16px));
+			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
+			gap: var(--gok-space-600, 32px);
 		}
 		.lead {
 			display: none;
