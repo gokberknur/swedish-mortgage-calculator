@@ -88,7 +88,7 @@ export function createMortgageModel() {
 		inputs.propertyValue <= 0
 			? ''
 			: inputs.downPayment >= inputs.propertyValue
-				? 'Must be below the property value'
+				? 'Enter less than the property value'
 				: inputs.downPayment < minDownPayment
 					? `Enter at least ${formatCurrency(minDownPayment)} (${downShare * 100}% of the property value)`
 					: ''

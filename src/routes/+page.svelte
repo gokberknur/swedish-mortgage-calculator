@@ -11,11 +11,13 @@
 	// The phone bar hides while the answer or the results are on screen, so it never repeats them.
 	let answerInView = $state(false);
 	let resultsInView = $state(false);
-	const watch = (set: (v: boolean) => void) => (node: HTMLElement) => {
-		const io = new IntersectionObserver(([e]) => set(e.isIntersecting));
-		io.observe(node);
-		return () => io.disconnect();
-	};
+	const watch =
+		(set: (v: boolean) => void, threshold = 0) =>
+		(node: HTMLElement) => {
+			const io = new IntersectionObserver(([e]) => set(e.isIntersecting), { threshold });
+			io.observe(node);
+			return () => io.disconnect();
+		};
 
 	// Pinned bars (the phone dock, the wide-screen ranking) reserve their height in the page's scroll
 	// padding, so a focused field or table scrolls clear of them instead of hiding underneath.
@@ -52,11 +54,11 @@
 		const refused = m.scenarios.filter((s) => s.id !== 'A' && s.rate < m.minAmortization);
 		if (refused.length)
 			out.push(
-				`${refused.map((s) => s.title).join(' and ')} ${refused.length > 1 ? 'are' : 'is'} below the ${m.minAmortization.toFixed(1)}% minimum`
+				`${refused.map((s) => s.title).join(' and ')} ${refused.length > 1 ? "aren't" : "isn't"} ranked: raise amortization to ${m.minAmortization.toFixed(1)}%.`
 			);
 		if (i.bRate >= i.aRate)
-			out.push('Invest the difference needs less amortization than Pay it down');
-		return out.length ? `${out.join('. ')}.` : '';
+			out.push(`Invest the difference isn't ranked: set its amortization below ${i.aRate}%.`);
+		return out.join(' ');
 	});
 	// A winner that also costs more each month says so on its row.
 	const extra = $derived.by(() => {
@@ -140,7 +142,17 @@
 		</a>
 	{/if}
 
-	<div class="right">
+	<div
+		class="right"
+		{@attach (n: HTMLElement) => {
+			const ro = new ResizeObserver(() =>
+				n.classList.toggle('scrolls', n.scrollHeight > n.clientHeight + 1)
+			);
+			ro.observe(n);
+			for (const c of n.children) ro.observe(c);
+			return () => ro.disconnect();
+		}}
+	>
 		<div class="answer" {@attach watch((v) => (answerInView = v))}>
 			{#if cmp && best && !invalid}
 				<section class="verdict">
@@ -153,11 +165,11 @@
 			{/if}
 		</div>
 
-		<div class="results" id="results" {@attach watch((v) => (resultsInView = v))}>
+		<div class="results" id="results">
 			{#if invalid}
 				<!-- The field error says what to fix; there is no answer for a loan no bank would grant. -->
 			{:else if cmp && best}
-				<div class="rank-wrap">
+				<div class="rank-wrap" {@attach watch((v) => (resultsInView = v), 1)}>
 					{#if ranked.length > 1}<p class="meta-label rank-cap" id="rank-cap">
 							Net position vs Pay it down, before ISK tax
 						</p>
@@ -284,12 +296,14 @@
 		.lead {
 			display: none;
 		}
+		.right:global(.scrolls) .answer {
+			background: var(--gok-color-bg, var(--gok-color-surface));
+		}
 		/* If the details make the column scroll, the verdict stays at its top. */
 		.answer {
 			position: sticky;
 			top: 0;
 			z-index: 1;
-			background: var(--gok-color-bg, var(--gok-color-surface));
 		}
 	}
 	.lead {
@@ -391,6 +405,7 @@
 			font-weight: var(--gok-font-weight-semibold, 600);
 		}
 		.dock-lead {
+			font-family: var(--gok-font-family-mono);
 			color: var(--gok-color-primary);
 			font-variant-numeric: tabular-nums;
 			font-size: var(--gok-type-body-small-size, 14px);

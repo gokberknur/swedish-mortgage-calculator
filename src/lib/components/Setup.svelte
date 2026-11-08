@@ -156,7 +156,9 @@
 						min="0"
 						max="10"
 						step="0.1"
-						error={model.meetsRequirement ? '' : `Minimum is ${model.minAmortization.toFixed(1)}%`}
+						error={model.meetsRequirement
+							? ''
+							: `Enter at least ${model.minAmortization.toFixed(1)}%`}
 						oninput={set('aRate')}
 						onchange={restore('aRate')}
 					></gok-number-input>
