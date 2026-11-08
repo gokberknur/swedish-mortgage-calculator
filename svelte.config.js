@@ -20,7 +20,9 @@ const config = {
 			mode: 'hash',
 			directives: {
 				'default-src': ['self'],
-				'script-src': ['self', themeHash],
+				// Cloudflare injects its Web Analytics beacon on the live domain.
+				'script-src': ['self', themeHash, 'https://static.cloudflareinsights.com'],
+				'connect-src': ['self', 'https://cloudflareinsights.com'],
 				// The design system's web components and `vite dev` set inline styles.
 				'style-src': ['self', 'unsafe-inline'],
 				'img-src': ['self', 'data:'],

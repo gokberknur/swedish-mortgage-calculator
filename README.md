@@ -19,8 +19,8 @@ The rules in force since 1 April 2026
 - **Ränteavdrag:** 30% of the first 100 000 kr of yearly interest per borrower, 21% above. Choose one
   or two borrowers; the loan is split equally.
 
-A switch covers loans taken before 1 April 2026: 15% down, plus 1% extra amortization when the loan
-is over 4.5 times gross yearly income. Those loans keep the old rule until the borrower and the bank
+A switch under More options covers loans taken before 1 April 2026: 15% down, plus 1% extra
+amortization when the loan is over 4.5 times the household's gross yearly income. Those loans keep the old rule until the borrower and the bank
 agree to drop it.
 
 Net position is investment value, minus any debt left, minus the extra interest (after ränteavdrag)
@@ -39,6 +39,7 @@ npm run dev      # http://localhost:5173
 npm test         # maths checks (node --test)
 npm run check    # types and Svelte
 npm run build    # static site in build/
+npm run deploy   # build, then publish to mortgage.gokberk.se (Cloudflare)
 ```
 
 ## Stack

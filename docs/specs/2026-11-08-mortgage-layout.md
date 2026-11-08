@@ -87,4 +87,122 @@ This work happens in the new `swedish-mortgage-calculator` repo, not in this sit
 
 ## Round log
 
-_Filled in as the rounds run._
+Direction chosen 2026-11-08: **split pane** (sketch 1 in the Design Hub).
+
+### Round 1: Block (2 HIGH, 4 MEDIUM, 3 LOW)
+
+All fixed:
+
+- HIGH: on phones the bottom bar covered the field you tabbed to. The page now keeps focused fields
+  clear of it (`scroll-padding-bottom`).
+- HIGH: the verdict could recommend a plan a bank would refuse, or one that wins only by spending
+  more each month. A warning under the verdict now says so in either case. Hybrid's monthly
+  investment is capped at 1 000 000 kr.
+- MEDIUM: screen readers heard nothing when the lead changed but the winner didn't. The live region
+  now includes the lead.
+- MEDIUM: the input column trapped the scroll wheel on desktop. It now passes the scroll to the page.
+- MEDIUM: the chart used three hues. The winner now takes the accent and the other two are greys;
+  line ends use short tagged names ("B · Invest") so they no longer truncate.
+- MEDIUM: "Total" meant two things. The schedule says "Payment (excl. avgift)" and "Interest
+  (before ränteavdrag)".
+- LOW: pinned table labels follow the results column width; the bottom bar comes right after the
+  inputs in tab order; non-winning bars are quieter in dark mode.
+
+### Round 2: Block (0 HIGH, 3 MEDIUM, 5 LOW)
+
+Fixed:
+
+- MEDIUM: at 1280×800, focusing a plan field scrolled the page and the verdict out of view. The
+  ranking (winner and all three net positions) now pins to the top of the results column on wide
+  screens; checked with focus on every input.
+- MEDIUM: the phone bar dropped the verdict's warnings. It now adds "⚠ Below the legal minimum" or
+  "⚠ Costs N kr more a month".
+- MEDIUM: the Regeringen link replaced the calculator and lost every input. It opens in a new tab
+  and says so.
+- LOW: the bar's focus clearance follows its measured height (it grows with a warning at 320px);
+  the schedule dialog's title is the plan name with "Payment schedule · 60 months" beneath, and its
+  first column says "Monthly outlay" like the rest of the page; LTV shows one decimal everywhere;
+  the "60-month schedule" buttons line up.
+
+Not changed:
+
+- LOW: the comparison table keeps its tab stop at wide widths where it does not scroll. Harmless,
+  and adding it conditionally needs a resize listener.
+- LOW: chart names stay short ("B · Invest"); full titles truncate at the line ends on phones.
+
+### Round 3: Block (0 HIGH, 4 MEDIUM, 5 LOW)
+
+Fixed:
+
+- MEDIUM: the pinned ranking dropped the verdict's warnings. It now carries the same short warning
+  as the phone bar.
+- MEDIUM: the pinned ranking covered a focused table. Its height now goes into the page's top scroll
+  padding on wide screens, the same way the phone bar's goes into the bottom.
+- MEDIUM: "Annual gross salary" was ambiguous with two borrowers. It is "Household gross income
+  (SEK/yr)", all borrowers combined, before tax.
+- MEDIUM: the chart's third line fell below 3:1 contrast. Both non-winning lines use the muted text
+  grey; the legend and line ends name them.
+- LOW: values outside a field's range no longer reach the verdict while typing; "· best" no longer
+  wraps on its own; the pinned ranking has inner padding.
+
+Not changed:
+
+- LOW: the phone bar is four lines tall at 320px when it shows a warning. Not checked with a real
+  on-screen keyboard.
+- LOW: the desktop input column scrolls inside itself with no visible cue on macOS.
+
+## Outcome
+
+Three rounds ran, the cap in this spec. No HIGH finding after round 1. Round 3's fixes were checked
+in Chrome (1280, 900, 390 and 320px, light and dark, focus on every input) but not re-reviewed, so
+the page has no Approve verdict yet. One more review before merging is worth it: round 2 and round 3
+each found a MEDIUM introduced by the previous round's fix.
+
+## Simplification pass (after round 3)
+
+Owner feedback: still too much at once. Cut to what answers the question, and put the rest one tap
+away:
+
+- Intro is one question: "Pay off your mortgage faster, or invest instead?"
+- Inputs: three loan fields up front. The pre-April switch, borrowers, household income and monthly
+  fee sit in a closed "More options". Loan, LTV and the minimum are one muted line with a "Rules"
+  button. Plan descriptions are a few words; helper text appears only when something needs
+  attention (B still says what it invests).
+- Results: "After 33 years 4 months", the verdict, "+90 716 kr more than Hybrid", the ranking and
+  the chart. The comparison table, the net-position definition and the method moved into the
+  accordion ("Compare in detail", "How it's calculated").
+- The input column no longer scrolls inside itself; the pinned ranking keeps the answer in view.
+
+Page height at default inputs: 3112px → 1547px at 1280×800, 4752px → 2583px at 390×844.
+
+## Copy and code pass
+
+- Copy: one term per concept ("plans", "monthly cost", "investment value"), plain phrasing in
+  errors and empty states, no nested parentheses in the rules dialog, and "How it's calculated" no
+  longer repeats warnings the page already shows.
+- Code: removed two unused maths helpers, unused result fields and a getter; the comparison is one
+  record keyed by plan (plan A scores 0 from the same formula, so its special cases are gone); five
+  hand-written listener actions became `on()` from `svelte/events`; the shared `.tag` and `.vh`
+  styles live once in `app.css`. About 150 lines shorter, same figures (checked in Chrome).
+
+### Round 4 (after simplification): Block (0 HIGH, 4 MEDIUM, 4 LOW)
+
+Fixed:
+
+- MEDIUM: an invalid plan B (rate not below A's) still fed the verdict. B now sits out of the
+  ranking and the verdict until its field is valid.
+- MEDIUM: the short warning had no subject and the illegal winner still said "best". The warning
+  names the plan, and that row says "not allowed".
+- MEDIUM: the ranking had no visible caption and "0 kr" for Pay it down read as "leaves you
+  nothing". It is captioned "Net position vs Pay it down" and A shows "baseline".
+- MEDIUM: investment returns did not say before or after tax. The field and the method say "before
+  ISK tax".
+- LOW: missing space in the rules dialog; accordion panels now line up with the column; chart lines
+  use the plan letters used everywhere else.
+
+Also, as agreed: on phones the answer now comes first (verdict, then inputs, then ranking and
+details), with the DOM in the same order so tab order matches. The bottom bar shows only while
+neither the answer nor the results are on screen.
+
+Not changed: LOW, the pinned first column of the phone comparison table is a light block over the
+gradient in light mode.
