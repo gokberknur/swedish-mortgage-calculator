@@ -65,11 +65,11 @@
 	const i = $derived(m.inputs);
 	type Plan = (typeof m.scenarios)[number];
 	const rows: [string, (s: Plan) => string][] = [
-		['Monthly cost, before ränteavdrag', (s) => formatCurrency(s.mortgageCost)],
+		['Monthly cost', (s) => formatCurrency(s.mortgageCost)],
 		['Amortization / month', (s) => formatCurrency(s.amort)],
 		['Invested / month', (s) => formatCurrency(s.invest)],
 		['Paid off in', (s) => s.payoff.display],
-		['Interest paid, before ränteavdrag', (s) => formatCurrency(cmp?.same[s.id].interestPaid ?? 0)],
+		['Interest paid', (s) => formatCurrency(cmp?.same[s.id].interestPaid ?? 0)],
 		['Investment value', (s) => formatCurrency(cmp?.same[s.id].investment ?? 0)]
 	];
 	const winNet = $derived(win && cmp ? cmp.same[win].net : 0);
@@ -90,22 +90,19 @@
 
 <div class="split">
 	<div class="answer" {@attach watch((v) => (answerInView = v))}>
-		{#if m.downPaymentError}
-			<gok-alert status="warning" class="notice"
-				>Banks need at least {m.downShare * 100}% down, so no bank would lend this.</gok-alert
-			>
-		{:else if cmp && best}
+		{#if cmp && best && !m.downPaymentError}
 			<section class="verdict">
 				<span class="meta-label">After {cmp.payoffDisplay}</span>
 				<h2 class="statement">
 					<span role="status">
-						{#if ranked.length === 1}Only Pay it down meets the minimum.{:else if m.verdict!.lead < 1}The
+						{#if ranked.length === 1}Only Pay it down qualifies.{:else if m.verdict!.lead < 1}The
 							plans come out even.{:else}{best.title}
 							comes out ahead.{#if win !== 'A'}<span class="vh"
 									>{` ${signed(winNet)} vs Pay it down.`}</span
 								>{/if}{/if}
 					</span>
 				</h2>
+				{#if win !== 'A'}<p class="lead">{signed(winNet)} vs Pay it down, before ISK tax</p>{/if}
 			</section>
 		{/if}
 	</div>
@@ -125,12 +122,14 @@
 	{/if}
 
 	<div class="results" id="results" {@attach watch((v) => (resultsInView = v))}>
-		{#if m.downPaymentError}
-			<!-- The warning above says it all; no ranking for a loan no bank would grant. -->
+		{#if m.downPaymentError || m.loanAmount <= 0}
+			<!-- The field error says what to fix; there is no answer for a loan no bank would grant. -->
 		{:else if cmp && best}
-			<div class="rank-wrap" {@attach padRoot('Top', '(min-width: 900px)')}>
-				<p class="meta-label rank-cap" id="rank-cap">Net position vs Pay it down, before ISK tax</p>
-				{#if ranked.length > 1}<ol class="rank" aria-labelledby="rank-cap">
+			<div class="rank-wrap">
+				{#if ranked.length > 1}<p class="meta-label rank-cap" id="rank-cap">
+						Net position vs Pay it down
+					</p>
+					<ol class="rank" aria-labelledby="rank-cap">
 						{#each ranked as r (r.id)}
 							<li class:win={win === r.id}>
 								<span class="tag" aria-hidden="true">{r.tag}</span>
@@ -183,6 +182,7 @@
 							</tbody>
 						</table>
 					</div>
+					<p class="fine">Costs and interest before ränteavdrag; investments before ISK tax.</p>
 				</gok-accordion-item>
 				<gok-accordion-item heading-level="2">
 					<span slot="summary">How it's calculated</span>
@@ -202,10 +202,6 @@
 					</ul>
 				</gok-accordion-item>
 			</gok-accordion>
-		{:else if m.loanAmount <= 0}
-			<gok-alert status="info" class="notice"
-				>Enter a property value above the down payment.</gok-alert
-			>
 		{:else}
 			<gok-alert status="info" class="notice"
 				>Set Pay it down's amortization above 0%. At 0% the loan is never repaid, so there is no
@@ -242,9 +238,24 @@
 		.answer {
 			grid-area: answer;
 		}
+		/* The answer column stays in view while you edit the inputs beside it. */
 		.results {
 			grid-area: results;
+			position: sticky;
+			top: var(--gok-space-400, 16px);
+			align-self: start;
 		}
+	}
+	.lead {
+		margin: var(--gok-space-300, 12px) 0 0;
+		font-family: var(--gok-font-family-mono);
+		font-variant-numeric: tabular-nums;
+		color: var(--gok-color-text-muted);
+	}
+	.fine {
+		margin: var(--gok-space-300, 12px) 0 0;
+		font-size: var(--gok-type-caption-size, 0.75rem);
+		color: var(--gok-color-text-muted);
 	}
 	.rank-cap {
 		margin: 0 0 var(--gok-space-300, 12px);
@@ -269,30 +280,12 @@
 		gap: var(--gok-space-100, 4px) var(--gok-space-300, 12px);
 		align-items: center;
 	}
-	/* Wide screens: the ranking pins to the top of the results, so the answer stays in view
-	   whichever input you are editing. */
 	.rank-wrap {
 		margin-top: 0;
 	}
 	.rank-warn {
 		margin: var(--gok-space-200, 8px) 0 0;
 		font-size: var(--gok-type-body-small-size, 14px);
-		color: var(--gok-color-status-warning-text, var(--gok-color-text));
-	}
-	@media (min-width: 900px) {
-		.rank-wrap {
-			position: sticky;
-			top: 0;
-			z-index: 2;
-			padding: var(--gok-space-300, 12px);
-			margin-inline: calc(-1 * var(--gok-space-300, 12px));
-			background: var(--gok-color-surface-overlay, var(--gok-color-surface));
-			backdrop-filter: var(--gok-surface-backdrop, none);
-			border-bottom: 1px solid var(--gok-color-border);
-		}
-		.rank li {
-			max-inline-size: 36rem;
-		}
 	}
 	.rank .val {
 		font-variant-numeric: tabular-nums;
@@ -351,7 +344,6 @@
 		.dock-warn {
 			display: block;
 			font-size: var(--gok-type-body-small-size, 14px);
-			color: var(--gok-color-status-warning-text, var(--gok-color-text));
 		}
 		.dock-cta {
 			flex: none;

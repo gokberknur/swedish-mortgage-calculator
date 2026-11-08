@@ -34,11 +34,6 @@
 	type Field = HTMLElement & { checked?: boolean; value?: string };
 
 	const i = $derived(model.inputs);
-	// Plans B and C may go below the legal minimum to explore; say so instead of blocking it.
-	const belowMin = (rate: number) =>
-		model.loanAmount > 0 && rate < model.minAmortization
-			? `Below the ${model.minAmortization.toFixed(1)}% legal minimum`
-			: '';
 </script>
 
 <section class="block" aria-labelledby="loan-h">
@@ -66,7 +61,7 @@
 			onchange={restore('downPayment')}
 		></gok-number-input>
 		<gok-number-input
-			label="Interest rate (%)"
+			label="Interest rate (%/yr)"
 			value={i.interestRate}
 			min="0"
 			max="20"
@@ -147,7 +142,7 @@
 			<div class="fields">
 				{#if s.id === 'A'}
 					<gok-number-input
-						label="Amortization (%)"
+						label="Amortization (%/yr)"
 						value={i.aRate}
 						min="0"
 						max="10"
@@ -158,26 +153,22 @@
 					></gok-number-input>
 				{:else if s.id === 'B'}
 					<gok-number-input
-						label="Amortization (%)"
+						label="Amortization (%/yr)"
 						value={i.bRate}
 						min="0"
 						max="10"
 						step="0.1"
-						helper={i.bRate >= i.aRate
-							? ''
-							: belowMin(i.bRate) || `Invests ${formatCurrency(s.invest)} a month`}
-						error={i.bRate >= i.aRate ? `Must be below Pay it down's ${i.aRate}%` : ''}
+						helper={i.bRate < i.aRate ? `Invests ${formatCurrency(s.invest)} a month` : ''}
 						oninput={set('bRate')}
 						onchange={restore('bRate')}
 					></gok-number-input>
 				{:else}
 					<gok-number-input
-						label="Amortization (%)"
+						label="Amortization (%/yr)"
 						value={i.cRate}
 						min="0"
 						max="10"
 						step="0.1"
-						helper={belowMin(i.cRate)}
 						oninput={set('cRate')}
 						onchange={restore('cRate')}
 					></gok-number-input>
@@ -258,6 +249,9 @@
 		padding-inline-start: calc(1.5rem + var(--gok-space-300, 12px));
 		color: var(--gok-color-text-muted);
 		font-size: var(--gok-type-body-small-size, 14px);
+	}
+	.options gok-number-input {
+		inline-size: 100%;
 	}
 	.options {
 		display: flex;
