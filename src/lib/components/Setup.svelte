@@ -17,7 +17,13 @@
 	// real number; leaving a field empty puts its last value back, so the field and the maths agree.
 	const set = (key: Key) => (e: Event) => {
 		const v = (e as NumberEvent).detail?.value;
-		if (v != null) model.inputs[key] = v;
+		// Out-of-range values wait for blur, where the field clamps them, so the verdict never
+		// shows a figure the field is about to reject.
+		const t = e.target as HTMLElement;
+		const min = t.getAttribute('min');
+		const max = t.getAttribute('max');
+		if (v == null || (min != null && v < +min) || (max != null && v > +max)) return;
+		model.inputs[key] = v;
 	};
 	const restore = (key: Key) => (e: Event) => {
 		if ((e as NumberEvent).detail?.value == null)
@@ -90,8 +96,8 @@
 		></gok-number-input>
 		{#if i.legacy}
 			<gok-number-input
-				label="Annual gross salary (SEK)"
-				helper="Sets the extra 1% rule for loans over 4.5× income"
+				label="Household gross income (SEK/yr)"
+				helper="All borrowers combined, before tax. Sets the extra 1% rule above 4.5× income"
 				locale="sv-SE"
 				value={i.annualSalary}
 				min="0"

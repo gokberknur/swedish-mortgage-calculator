@@ -19,7 +19,7 @@ See `tasks/plan.md`.
   - Verify: Chrome pass; projects registry in the personal site shows repo URL and **public**
 - [x] T5: Three layout sketches in the Design Hub, Feature development tab
   - Acceptance: split pane, results first, plan columns; each at 390 and 1280
-- [ ] T6: Build the chosen direction (branch)
+- [x] T6: Build the chosen direction (branch)
   - Verify: layout spec success criteria 1–7
-- [ ] T7: Review loop, max 3 rounds, logged in the layout spec
+- [x] T7: Review loop, max 3 rounds, logged in the layout spec
 - [ ] T8: Final checkpoint and PR

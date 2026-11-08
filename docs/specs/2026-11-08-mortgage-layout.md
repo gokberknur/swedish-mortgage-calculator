@@ -129,3 +129,31 @@ Not changed:
 - LOW: the comparison table keeps its tab stop at wide widths where it does not scroll. Harmless,
   and adding it conditionally needs a resize listener.
 - LOW: chart names stay short ("B · Invest"); full titles truncate at the line ends on phones.
+
+### Round 3: Block (0 HIGH, 4 MEDIUM, 5 LOW)
+
+Fixed:
+
+- MEDIUM: the pinned ranking dropped the verdict's warnings. It now carries the same short warning
+  as the phone bar.
+- MEDIUM: the pinned ranking covered a focused table. Its height now goes into the page's top scroll
+  padding on wide screens, the same way the phone bar's goes into the bottom.
+- MEDIUM: "Annual gross salary" was ambiguous with two borrowers. It is "Household gross income
+  (SEK/yr)", all borrowers combined, before tax.
+- MEDIUM: the chart's third line fell below 3:1 contrast. Both non-winning lines use the muted text
+  grey; the legend and line ends name them.
+- LOW: values outside a field's range no longer reach the verdict while typing; "· best" no longer
+  wraps on its own; the pinned ranking has inner padding.
+
+Not changed:
+
+- LOW: the phone bar is four lines tall at 320px when it shows a warning. Not checked with a real
+  on-screen keyboard.
+- LOW: the desktop input column scrolls inside itself with no visible cue on macOS.
+
+## Outcome
+
+Three rounds ran, the cap in this spec. No HIGH finding after round 1. Round 3's fixes were checked
+in Chrome (1280, 900, 390 and 320px, light and dark, focus on every input) but not re-reviewed, so
+the page has no Approve verdict yet. One more review before merging is worth it: round 2 and round 3
+each found a MEDIUM introduced by the previous round's fix.

@@ -61,17 +61,24 @@
 	}
 
 	// Focused fields scroll clear of the bar instead of hiding behind it, whatever its height.
-	function padForDock(node: HTMLElement) {
-		const root = document.documentElement;
-		const ro = new ResizeObserver(() => {
-			root.style.scrollPaddingBottom = `${node.offsetHeight + 8}px`;
-		});
-		ro.observe(node);
-		return () => {
-			ro.disconnect();
-			root.style.scrollPaddingBottom = '';
+	// Pinned bars (the phone dock, the wide-screen ranking) reserve their height in the page's scroll
+	// padding, so a focused field or table scrolls clear of them instead of hiding underneath.
+	const padRoot =
+		(side: 'Top' | 'Bottom', query = 'all') =>
+		(node: HTMLElement) => {
+			const root = document.documentElement;
+			const mq = matchMedia(query);
+			const set = () =>
+				(root.style[`scrollPadding${side}`] = mq.matches ? `${node.offsetHeight + 8}px` : '');
+			const ro = new ResizeObserver(set);
+			ro.observe(node);
+			mq.addEventListener('change', set);
+			return () => {
+				ro.disconnect();
+				mq.removeEventListener('change', set);
+				root.style[`scrollPadding${side}`] = '';
+			};
 		};
-	}
 
 	const netAt = (id: ScenarioId) =>
 		id === 'A'
@@ -108,8 +115,9 @@
 	const chartColors = $derived(
 		(['A', 'B', 'C'] as const)
 			.map((id, n) => {
-				const grey = n === 0 ? 'var(--gok-color-text-muted)' : 'var(--gok-color-border-strong)';
-				return `--gok-chart-${n + 1}: ${id === win ? 'var(--gok-color-primary)' : grey}`;
+				// Both non-winners in the muted text grey: it clears 3:1 in both themes; the legend and
+				// line-end labels tell them apart.
+				return `--gok-chart-${n + 1}: ${id === win ? 'var(--gok-color-primary)' : 'var(--gok-color-text-muted)'}`;
 			})
 			.join('; ')
 	);
@@ -138,7 +146,7 @@
 		<Setup model={m} />
 	</aside>
 	{#if m.verdict && !resultsInView}
-		<a class="dock" href="#results" {@attach padForDock}>
+		<a class="dock" href="#results" {@attach padRoot('Bottom')}>
 			<span>
 				<b
 					>{#if m.verdict.lead < 1}The plans finish level{:else}{m.verdict.best.title} ahead{/if}</b
@@ -184,20 +192,26 @@
 					>
 				{/if}
 			</section>
-			<ol class="rank" aria-label="Net position by plan">
-				{#each ranked as r (r.id)}
-					<li class:win={win === r.id}>
-						<span class="tag" aria-hidden="true">{r.tag}</span>
-						<span class="name"
-							>{r.title}{#if win === r.id}<span class="meta-label">{' · best'}</span>{/if}</span
-						>
-						<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
-						<span class="bar" aria-hidden="true"
-							><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
-						>
-					</li>
-				{/each}
-			</ol>
+			<div class="rank-wrap" {@attach padRoot('Top', '(min-width: 900px)')}>
+				<ol class="rank" aria-label="Net position by plan">
+					{#each ranked as r (r.id)}
+						<li class:win={win === r.id}>
+							<span class="tag" aria-hidden="true">{r.tag}</span>
+							<span class="name"
+								>{r.title}{#if win === r.id}<span class="meta-label">{'\u00a0·\u00a0best'}</span
+									>{/if}</span
+							>
+							<span class="val" class:neg={r.net < 0}>{signed(r.net)}</span>
+							<span class="bar" aria-hidden="true"
+								><i style:inline-size="{(Math.max(0, r.net) / rankMax) * 100}%"></i></span
+							>
+						</li>
+					{/each}
+				</ol>
+				{#if caveats.length}<p class="rank-warn">
+						⚠ {caveats.map((c) => c.short).join(' · ')}
+					</p>{/if}
+			</div>
 
 			<section class="block">
 				<div class="block-head"><h2 class="gok-headline-4">How they compare</h2></div>
@@ -447,7 +461,7 @@
 	}
 	.rank {
 		list-style: none;
-		margin: var(--gok-space-600, 32px) 0 0;
+		margin: 0;
 		padding: 0;
 		display: grid;
 		gap: var(--gok-space-300, 12px);
@@ -472,13 +486,21 @@
 	}
 	/* Wide screens: the ranking pins to the top of the results, so the answer stays in view
 	   whichever input you are editing. */
+	.rank-wrap {
+		margin-top: var(--gok-space-600, 32px);
+	}
+	.rank-warn {
+		margin: var(--gok-space-200, 8px) 0 0;
+		font-size: var(--gok-type-body-small-size, 14px);
+		color: var(--gok-color-status-warning-text, var(--gok-color-text));
+	}
 	@media (min-width: 900px) {
-		.rank {
+		.rank-wrap {
 			position: sticky;
 			top: 0;
 			z-index: 2;
-			max-inline-size: none;
-			padding-block: var(--gok-space-300, 12px);
+			padding: var(--gok-space-300, 12px);
+			margin-inline: calc(-1 * var(--gok-space-300, 12px));
 			background: var(--gok-color-surface-overlay, var(--gok-color-surface));
 			backdrop-filter: var(--gok-surface-backdrop, none);
 			border-bottom: 1px solid var(--gok-color-border);
