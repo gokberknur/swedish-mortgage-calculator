@@ -16,20 +16,28 @@
 	type NumberEvent = CustomEvent<{ value: number | null }>;
 	// gok-number-input reports `null` while a field is empty. Typing updates the model only with a
 	// real number; leaving a field empty puts its last value back, so the field and the maths agree.
-	const set = (key: Key) => (e: Event) => {
-		const v = (e as NumberEvent).detail?.value;
-		// Out-of-range values wait for blur, where the field clamps them, so the verdict never
-		// shows a figure the field is about to reject.
-		const t = e.target as HTMLElement;
-		const min = t.getAttribute('min');
-		const max = t.getAttribute('max');
-		if (v == null || (min != null && v < +min) || (max != null && v > +max)) return;
-		model.inputs[key] = v;
-	};
+	const set =
+		(key: Key, ok: (v: number) => boolean = () => true) =>
+		(e: Event) => {
+			const v = (e as NumberEvent).detail?.value;
+			// Out-of-range values wait for blur, where the field clamps them, so the verdict never
+			// shows a figure the field is about to reject.
+			const t = e.target as HTMLElement;
+			const min = t.getAttribute('min');
+			const max = t.getAttribute('max');
+			if (v == null || (min != null && v < +min) || (max != null && v > +max) || !ok(v)) return;
+			model.inputs[key] = v;
+		};
 	const restore = (key: Key) => (e: Event) => {
-		if ((e as NumberEvent).detail?.value == null)
-			(e.target as HTMLElement & { value: number }).value = model.inputs[key];
+		const v = (e as NumberEvent).detail?.value;
+		if (v == null) (e.target as HTMLElement & { value: number }).value = model.inputs[key];
+		// A value held back while typing is committed on change, where its field error can show.
+		else model.inputs[key] = v;
 	};
+	// While typing, half-entered loan figures would blank the answer on every keystroke; only a loan a
+	// bank could grant is committed as you type.
+	const grantable = (property: number, down: number) =>
+		property > 0 && down < property && down >= property * model.downShare;
 
 	type Field = HTMLElement & { checked?: boolean; value?: string };
 
@@ -40,24 +48,24 @@
 	<h2 class="gok-headline-5" id="loan-h">Your loan</h2>
 	<div class="fields">
 		<gok-number-input
-			label="Property value (SEK)"
+			label="Property value (kr)"
 			value={i.propertyValue}
 			min="0"
 			locale="sv-SE"
 			step="100000"
 			error={model.propertyError}
-			oninput={set('propertyValue')}
+			oninput={set('propertyValue', (v) => grantable(v, i.downPayment))}
 			onchange={restore('propertyValue')}
 		></gok-number-input>
 		<gok-number-input
-			label="Down payment (SEK)"
+			label="Down payment (kr)"
 			value={i.downPayment}
 			min="0"
 			locale="sv-SE"
 			step="50000"
 			helper={`Min ${model.downShare * 100}%`}
 			error={model.downPaymentError}
-			oninput={set('downPayment')}
+			oninput={set('downPayment', (v) => grantable(i.propertyValue, v))}
 			onchange={restore('downPayment')}
 		></gok-number-input>
 		<gok-number-input
@@ -71,17 +79,21 @@
 		></gok-number-input>
 	</div>
 	<p class="summary">
-		Loan <b>{formatCurrency(model.loanAmount)}</b> · Loan-to-value <b>{model.ltv.toFixed(1)}%</b><br
-		/>
+		Loan <b
+			>{model.loanAmount > 0 && !model.downPaymentError ? formatCurrency(model.loanAmount) : '–'}</b
+		><br />
 		Min amortization
 		<b
-			>{#if model.loanAmount > 0}{model.minAmortization.toFixed(1)}%/yr{:else}–{/if}</b
+			>{#if model.loanAmount > 0 && !model.downPaymentError}{model.minAmortization.toFixed(
+					1
+				)}%/yr{:else}–{/if}</b
 		>
-		<gok-button
-			variant="tertiary"
-			size="s"
-			{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = true))}>Rules</gok-button
-		>
+		{#if model.loanAmount > 0 && !model.downPaymentError && model.minAmortization > 0}<gok-button
+				variant="tertiary"
+				size="s"
+				{@attach (n: HTMLElement) => on(n, 'click', () => (openRules = true))}
+				>Why {model.minAmortization.toFixed(1)}%?</gok-button
+			>{/if}
 	</p>
 	<gok-accordion class="more">
 		<gok-accordion-item heading-level="3">
@@ -106,7 +118,7 @@
 				</gok-segmented>
 				{#if i.legacy}
 					<gok-number-input
-						label="Household income (SEK/yr)"
+						label="Household income (kr/yr)"
 						value={i.annualSalary}
 						min="0"
 						helper="All borrowers, before tax"
@@ -147,7 +159,11 @@
 						min="0"
 						max="10"
 						step="0.1"
-						error={model.meetsRequirement ? '' : `Minimum is ${model.minAmortization.toFixed(1)}%`}
+						error={i.aRate <= 0
+							? 'Enter more than 0%'
+							: model.meetsRequirement
+								? ''
+								: `Enter at least ${model.minAmortization.toFixed(1)}%`}
 						oninput={set('aRate')}
 						onchange={restore('aRate')}
 					></gok-number-input>
@@ -158,7 +174,9 @@
 						min="0"
 						max="10"
 						step="0.1"
-						helper={i.bRate < i.aRate ? `Invests ${formatCurrency(s.invest)} a month` : ''}
+						helper={!model.invalid && i.bRate < i.aRate && i.bRate >= model.minAmortization
+							? `Invests ${formatCurrency(s.invest)} a month`
+							: ''}
 						oninput={set('bRate')}
 						onchange={restore('bRate')}
 					></gok-number-input>
@@ -173,7 +191,7 @@
 						onchange={restore('cRate')}
 					></gok-number-input>
 					<gok-number-input
-						label="Monthly investment (SEK)"
+						label="Monthly investment (kr)"
 						locale="sv-SE"
 						value={i.cInvestmentAmount}
 						min="0"
@@ -203,29 +221,27 @@
 				>Source: Regeringen<span class="vh">{' (opens in a new tab)'}</span> ↗</a
 			>
 		{/if}
-		<br />Your loan-to-value is {model.ltv.toFixed(
-			1
-		)}%{#if i.legacy}{' and your debt-to-income '}{model.lti.toFixed(2)}×{/if}, so the minimum is {model.minAmortization.toFixed(
-			1
-		)}% a year.
 	</p>
 	<ul class="rules">
 		<li class:on={model.ltv > 70}>
-			LTV &gt; 70% → 2%/yr{#if model.ltv > 70}<span class="applies">{' · applies to you'}</span
+			Loan-to-value &gt; 70% → 2%/yr{#if model.ltv > 70}<span class="applies"
+					>{' · applies to you'}</span
 				>{/if}
 		</li>
 		<li class:on={model.ltv >= 50 && model.ltv <= 70}>
-			LTV 50–70% → 1%/yr{#if model.ltv >= 50 && model.ltv <= 70}<span class="applies"
+			Loan-to-value 50–70% → 1%/yr{#if model.ltv >= 50 && model.ltv <= 70}<span class="applies"
 					>{' · applies to you'}</span
 				>{/if}
 		</li>
 		<li class:on={model.ltv < 50}>
-			LTV &lt; 50% → 0%/yr{#if model.ltv < 50}<span class="applies">{' · applies to you'}</span
+			Loan-to-value &lt; 50% → 0%/yr{#if model.ltv < 50}<span class="applies"
+					>{' · applies to you'}</span
 				>{/if}
 		</li>
 		{#if i.legacy}
 			<li class:on={model.lti > 4.5}>
-				LTI &gt; 4.5× → +1%/yr{#if model.lti > 4.5}<span class="applies">{' · applies to you'}</span
+				Loan &gt; 4.5× income → +1%/yr{#if model.lti > 4.5}<span class="applies"
+						>{' · applies to you'}</span
 					>{/if}
 			</li>
 		{/if}
@@ -251,7 +267,8 @@
 		font-size: var(--gok-type-body-small-size, 14px);
 	}
 	.options gok-number-input {
-		inline-size: 100%;
+		display: block;
+		align-self: stretch;
 	}
 	.options {
 		display: flex;
@@ -273,6 +290,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.summary b {
+		font-family: var(--gok-font-family-mono);
 		color: var(--gok-color-text);
 		font-weight: var(--gok-font-weight-medium, 500);
 	}

@@ -83,17 +83,25 @@ export function createMortgageModel() {
 	const minAmortization = $derived(calculateSwedishAmortization(ltv, lti, inputs.legacy));
 	const downShare = $derived(minDownShare(inputs.legacy));
 	const minDownPayment = $derived(inputs.propertyValue * downShare);
+	const propertyError = $derived(inputs.propertyValue > 0 ? '' : 'Enter a property value');
 	const downPaymentError = $derived(
-		inputs.downPayment < minDownPayment && inputs.propertyValue > 0
-			? `Enter at least ${formatCurrency(minDownPayment)} (${downShare * 100}% of the property value)`
-			: ''
-	);
-	const propertyError = $derived(
-		inputs.propertyValue > 0 && loanAmount <= 0
-			? `Enter a value above your down payment of ${formatCurrency(inputs.downPayment)}`
-			: ''
+		inputs.propertyValue <= 0
+			? ''
+			: inputs.downPayment >= inputs.propertyValue
+				? 'Enter less than the property value'
+				: inputs.downPayment < minDownPayment
+					? `Enter at least ${formatCurrency(minDownPayment)} (${downShare * 100}% of the property value)`
+					: ''
 	);
 	const meetsRequirement = $derived(inputs.aRate >= minAmortization);
+	// Inputs no bank would accept leave the answer empty; each field's own error says what to fix.
+	const invalid = $derived(
+		!!propertyError ||
+			!!downPaymentError ||
+			loanAmount <= 0 ||
+			!meetsRequirement ||
+			inputs.aRate <= 0
+	);
 
 	const monthlyInterest = $derived(calculateMonthlyInterest(loanAmount, inputs.interestRate));
 	const monthlyTaxBenefit = $derived(calculateMonthlyTaxBenefit(monthlyInterest, inputs.borrowers));
@@ -223,6 +231,9 @@ export function createMortgageModel() {
 		},
 		get propertyError() {
 			return propertyError;
+		},
+		get invalid() {
+			return invalid;
 		},
 		get meetsRequirement() {
 			return meetsRequirement;

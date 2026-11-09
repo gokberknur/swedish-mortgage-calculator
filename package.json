@@ -19,7 +19,7 @@
 		"lint": "prettier --check ."
 	},
 	"dependencies": {
-		"@gokberknur/design-system": "^0.30.0"
+		"@gokberknur/design-system": "^0.31.0"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-static": "^3.0.8",
